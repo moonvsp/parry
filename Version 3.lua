@@ -1,12 +1,12 @@
--- Originally made by @unkamui
--- Remastered by @yuhjinxx
+-- // Originally made by @unkamui
+-- // Remastered by @yuhjinxx
 
 _G.VV_AutoParry = {
     ToggleKey       = "G",
     BlockKey        = "F",
     DodgeKey        = "Q",
-    PingMs          = 10,
-    AutoPing        = false,
+    PingMs          = 20,
+    AutoPing        = true,
     ShowRange       = true,
     FallbackEnabled = true,
     HealthCheck     = true,
@@ -16,41 +16,36 @@ _G.VV_AutoParry = {
 }
 
 _G.VV_WeaponLog = {
-    ["Club"]        = { timing = 0.635, range = 6.88 },
-    ["DualKatana"]  = { timing = 0.585, range = 6.25 },
+    ["Club"]        = { timing = 0.600, range = 6.88 },
+    ["DualKatana"]  = { timing = 0.550, range = 6.25 },
     ["Hakuda"] = {
-        ["Fists"] =    { timing = 0.412, range = 5.95 },
-        ["Boxing"] =   { timing = 0.4495, range = 5.8 },
-        ["Karate"] =   { timing = 0.452, range = 6 },
-        ["MuayThai"] = { timing = 0.452, range = 6.1 },
-        ["Wrestling"] = { timing = 0.497, range = 6.05 },
+        ["Fists"] =    { timing = 0.380, range = 5.95 },
+        ["Boxing"] =   { timing = 0.420, range = 5.8 },
+        ["Karate"] =   { timing = 0.425, range = 6 },
+        ["MuayThai"] = { timing = 0.425, range = 6.1 },
+        ["Wrestling"] = { timing = 0.470, range = 6.05 },
     },
-    ["Flail"]       = { timing = 0.800, range = 6.25 },
-    ["Greataxe"]    = { timing = 0.585, range = 6.7 },
-    ["Greatsword"]  = { timing = 0.635, range = 7 },
-    ["Hammer"]      = { timing = 0.920, range = 6.7 },
-    ["Katana"]      = { timing = 0.545, range = 6.25 },
-    ["Lance"]       = { timing = 0.665, range = 7.45 },
-    ["Minigun"]     = { timing = 0.535, range = 7.05 },
-    ["Nunchucks"]   = { timing = 0.677, range = 6 },
-    ["Odachi"]      = { timing = 0.545, range = 6.8 },
-    ["Rapier"]      = { timing = 0.470, range = 6.5 },
-    ["ReishiGun"]   = { timing = 0.735, range = 7.125 },
-    ["Rifle"]       = { timing = 0.490, range = 6.6 },
-    ["Scythe"]      = { timing = 0.480, range = 6.95 },
-    ["Spear"]       = { timing = 0.535, range = 13.3 },
-    ["Tanto"]       = { timing = 0.545, range = 6.05 },
+    ["Flail"]       = { timing = 0.770, range = 6.25 },
+    ["Greataxe"]    = { timing = 0.550, range = 6.7 },
+    ["Greatsword"]  = { timing = 0.600, range = 7 },
+    ["Hammer"]      = { timing = 0.890, range = 6.7 },
+    ["Katana"]      = { timing = 0.510, range = 6.25 },
+    ["Lance"]       = { timing = 0.630, range = 7.45 },
+    ["Minigun"]     = { timing = 0.500, range = 7.05 },
+    ["Nunchucks"]   = { timing = 0.640, range = 6 },
+    ["Odachi"]      = { timing = 0.510, range = 6.8 },
+    ["Rapier"]      = { timing = 0.440, range = 6.5 },
+    ["ReishiGun"]   = { timing = 0.700, range = 7.125 },
+    ["Rifle"]       = { timing = 0.460, range = 6.6 },
+    ["Scythe"]      = { timing = 0.450, range = 6.95 },
+    ["Spear"]       = { timing = 0.500, range = 13.3 },
+    ["Tanto"]       = { timing = 0.510, range = 6.05 },
 }
 
 local Players     = game:GetService("Players")
 local Workspace   = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local Mouse       = LocalPlayer:GetMouse()
-
--- FIXED BUG 1: Move these declarations BEFORE any functions that reference them
-local WeaponLog = _G.VV_WeaponLog or {}
-local TIMING_DEFAULT = 0.42
-local RANGE_DEFAULT = 14
 
 local InstanceKey = "VVUltiParrybyJinx"
 do
@@ -103,21 +98,6 @@ local function GetWeaponModel(char)
     return nil
 end
 
-local function GetHakudaType(target)
-    if not target then return nil end
-    local status = GetStatus(target)
-    if not status then return nil end
-    local hakuda = status:FindFirstChild("Hakuda")
-    if not hakuda then return nil end
-    local hakudaTypes = {"Fists", "Boxing", "Karate", "MuayThai", "Wrestling"}
-    for _, typeName in ipairs(hakudaTypes) do
-        if hakuda:FindFirstChild(typeName) then
-            return typeName
-        end
-    end
-    return "Fists"
-end
-
 local function GetWeaponType(weaponModel)
     if not weaponModel then return "Unknown" end
     local wt = weaponModel:FindFirstChild("WeaponType")
@@ -132,7 +112,7 @@ local function GetWeaponType(weaponModel)
             local names = {
                 [0]="Fists",[1]="Sword",[2]="Katana",[3]="Greatsword",
                 [4]="Scythe",[5]="Hammer",[6]="Rapier",[7]="Lance",
-                [8]="Minigun",[9]="DualKatana"
+                [8]="Minigun",[9]="DualKatanas"
             }
             return names[wt.Value] or ("Weapon_"..tostring(wt.Value))
         end
@@ -140,42 +120,19 @@ local function GetWeaponType(weaponModel)
     return weaponModel.Name or "Unknown"
 end
 
--- FIXED BUG 1: Now WeaponLog is in scope
-local function GetServerWindup(weaponType, target)
-    local entry
-    if weaponType == "Hakuda" and target then
-        local hakudaType = GetHakudaType(target)
-        if hakudaType then
-            local hakudaEntry = WeaponLog["Hakuda"]
-            if hakudaEntry and hakudaEntry[hakudaType] then
-                entry = hakudaEntry[hakudaType]
-            end
+local function GetHakudaType(target)
+    if not target then return nil end
+    local status = GetStatus(target)
+    if not status then return nil end
+    local hakuda = status:FindFirstChild("Hakuda")
+    if not hakuda then return nil end
+    local hakudaTypes = {"Fists", "Boxing", "Karate", "MuayThai", "Wrestling"}
+    for _, typeName in ipairs(hakudaTypes) do
+        if hakuda:FindFirstChild(typeName) then
+            return typeName
         end
-    else
-        entry = WeaponLog[weaponType]
     end
-    if entry and type(entry.timing) == "number" then
-        return entry.timing, true
-    end
-    return TIMING_DEFAULT, false
-end
-
-local function GetWeaponRange(weaponType, target)
-    if weaponType == "Hakuda" then
-        local hakudaType = GetHakudaType(target)
-        if hakudaType then
-            local hakudaEntry = WeaponLog["Hakuda"]
-            if hakudaEntry and hakudaEntry[hakudaType] then
-                return hakudaEntry[hakudaType].range
-            end
-        end
-        return 5.95
-    end
-    local entry = WeaponLog[weaponType]
-    if entry and type(entry.range) == "number" then
-        return entry.range
-    end
-    return RANGE_DEFAULT
+    return "Fists"
 end
 
 local function HasEffect(model, name)
@@ -229,11 +186,6 @@ local SpecialKeys = {
     NumPadDecimal=0x6E,NumPadDivide=0x6F,
 }
 
-local SpecialKeyNames = {}
-for name, code in pairs(SpecialKeys) do
-    if not SpecialKeyNames[code] then SpecialKeyNames[code] = name end
-end
-
 local function ResolveKey(key, fallback)
     if type(key) == "number" then return key end
     if type(key) == "string" then
@@ -243,24 +195,7 @@ local function ResolveKey(key, fallback)
     return type(fallback) == "string" and fallback:byte() or fallback
 end
 
-local function KeyCodeToLabel(code)
-    if type(code) ~= "number" then return "?" end
-    if SpecialKeyNames[code] then return SpecialKeyNames[code] end
-    if code >= 0x30 and code <= 0x5A then return string.char(code) end
-    return "0x" .. string.format("%X", code)
-end
-
-local CaptureCandidates = {}
-for c = 0x30, 0x39 do CaptureCandidates[#CaptureCandidates+1] = c end
-for c = 0x41, 0x5A do CaptureCandidates[#CaptureCandidates+1] = c end
-for _, code in pairs(SpecialKeys) do
-    local dup = false
-    for _, existing in ipairs(CaptureCandidates) do
-        if existing == code then dup = true break end
-    end
-    if not dup then CaptureCandidates[#CaptureCandidates+1] = code end
-end
-
+-- FIXED: Get function that properly handles false values
 local Cfg = (_G and _G.VV_AutoParry) or {}
 local function Get(key, default)
     local val = Cfg[key]
@@ -273,37 +208,19 @@ end
 local KEY_TOGGLE  = ResolveKey(Get("ToggleKey",  "G"), "G")
 local KEY_BLOCK   = ResolveKey(Get("BlockKey",   "F"), "F")
 local KEY_DODGE   = ResolveKey(Get("DodgeKey",   "Q"), "Q")
+local PingMs          = math.max(0, Get("PingMs", 0))
+local AutoPing        = Get("AutoPing", true)
+local ShowRange       = Get("ShowRange", true)
+local FallbackEnabled = Get("FallbackEnabled", true)
+local HealthCheck     = Get("HealthCheck", true)
+local ShowPing        = Get("ShowPing", true)
+local ShowWeapon      = Get("ShowWeapon", true)
+local ShowName        = Get("ShowName", true)
 
-local function CfgBool(key, default)
-    local v = Cfg[key]
-    if v == nil then return default end
-    return v and true or false
-end
+local WeaponLog = _G.VV_WeaponLog or {}
+local TIMING_DEFAULT = 0.42
+local RANGE_DEFAULT = 14
 
-local function CfgNum(key, default)
-    local v = Cfg[key]
-    if type(v) == "number" then return v end
-    return default
-end
-
-local function GetPingMs()          return math.max(0, CfgNum("PingMs", 10)) end
-local function GetAutoPing()        return CfgBool("AutoPing", false) end
-local function GetShowRange()       return CfgBool("ShowRange", true) end
-local function GetFallbackEnabled() return CfgBool("FallbackEnabled", true) end
-local function GetHealthCheck()     return CfgBool("HealthCheck", true) end
-local function GetShowPing()        return CfgBool("ShowPing", true) end
-local function GetShowWeapon()      return CfgBool("ShowWeapon", true) end
-local function GetShowName()        return CfgBool("ShowName", true) end
-
--- FIXED BUG 2: RangeSquared now initialized after RANGE_DEFAULT is properly in scope
-local RangeSquared = RANGE_DEFAULT * RANGE_DEFAULT
-
--- FIXED BUG 3: SafeCall wrapper for UI fetch
-local Lib = SafeCall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/neaxusxgod-png/INS-ui/main/uilib.lua"))()
-end, nil) or INSui
-
--- Ping and adaptive compensation code continues here...
 local adaptive_comp_ms = 50
 local ADAPT_UP = 20
 local ADAPT_DOWN = 6
@@ -349,12 +266,9 @@ local function try_api_ping()
 end
 
 local function update_ping()
-    local autoPing = GetAutoPing()
-    local pingMs = GetPingMs()
-
-    if not autoPing then
-        ping_smooth_ms = pingMs
-        ping_raw_ms = pingMs
+    if not AutoPing then
+        ping_smooth_ms = PingMs
+        ping_raw_ms = PingMs
         ping_initialized = true
         ping_api_works = false
         return
@@ -385,9 +299,8 @@ local function update_ping()
 end
 
 local function get_ping_lead()
-    local autoPing = GetAutoPing()
-    if not autoPing then
-        return math.max(0, GetPingMs()) / 1000
+    if not AutoPing then
+        return math.max(0, PingMs) / 1000
     end
     local comp
     if ping_api_works then
@@ -395,7 +308,7 @@ local function get_ping_lead()
     else
         comp = adaptive_comp_ms
     end
-    comp = math.max(comp, GetPingMs())
+    comp = math.max(comp, PingMs)
     return comp / 1000
 end
 
@@ -421,73 +334,110 @@ local function update_adaptive_ping(now)
     prev_self_deflecting = self_deflect_now
 end
 
-local function ComputeFireAt(signalStartedAt, weaponType, target)
-    local windup   = GetServerWindup(weaponType, target)
+local function GetWeaponRange(weaponType, target)
+    if weaponType == "Hakuda" then
+        local hakudaType = GetHakudaType(target)
+        if hakudaType then
+            local hakudaEntry = WeaponLog["Hakuda"]
+            if hakudaEntry and hakudaEntry[hakudaType] then
+                return hakudaEntry[hakudaType].range
+            end
+        end
+        return 5.95
+    end
+    local entry = WeaponLog[weaponType]
+    if entry and type(entry.range) == "number" then
+        return entry.range
+    end
+    return RANGE_DEFAULT
+end
+
+local function GetServerWindup(weaponType)
+    local entry
+    if weaponType == "Hakuda" then
+        local hakudaType = GetHakudaType(CurrentTarget or GetChar())
+        if hakudaType then
+            local hakudaEntry = WeaponLog["Hakuda"]
+            if hakudaEntry and hakudaEntry[hakudaType] then
+                entry = hakudaEntry[hakudaType]
+            end
+        end
+    else
+        entry = WeaponLog[weaponType]
+    end
+    if entry and type(entry.timing) == "number" then
+        return entry.timing, true
+    end
+    return TIMING_DEFAULT, false
+end
+
+local Learned   = {}
+local LearnedN  = {}
+local LEARN_ALPHA = 0.20
+local LEARN_MIN   = 2
+
+local function RecordSample(weaponType, clientDelta, isDeflect)
+    if not weaponType or weaponType == "Unknown" then return end
+    local ping = get_ping_lead()
+    local serverWindup
+    if isDeflect then
+        serverWindup = clientDelta + 0.175
+    else
+        serverWindup = clientDelta - ping
+    end
+    if serverWindup < 0.05 or serverWindup > 1.5 then return end
+    local entry
+    if weaponType == "Hakuda" then
+        local hakudaType = GetHakudaType(CurrentTarget or GetChar())
+        if hakudaType then
+            local hakudaEntry = WeaponLog["Hakuda"]
+            if hakudaEntry and hakudaEntry[hakudaType] then
+                entry = hakudaEntry[hakudaType]
+            end
+        end
+    else
+        entry = WeaponLog[weaponType]
+    end
+    if entry and type(entry.timing) == "number" then return end
+    if not Learned[weaponType] then
+        Learned[weaponType]  = serverWindup
+        LearnedN[weaponType] = 1
+    else
+        Learned[weaponType] = Learned[weaponType] + LEARN_ALPHA * (serverWindup - Learned[weaponType])
+        LearnedN[weaponType] = math.min(LearnedN[weaponType] + 1, 20)
+    end
+end
+
+local function ComputeFireAt(signalStartedAt, weaponType)
+    local windup   = GetServerWindup(weaponType)
     local ping     = get_ping_lead()
     local holdHalf = 0.125
     return signalStartedAt + windup - holdHalf - ping
 end
 
 local CurrentWeaponType = "Unknown"
-local EnemyWeaponRange = RANGE_DEFAULT
-local MyWeaponRange = 6.5
+local CurrentWeaponRange = RANGE_DEFAULT
 
 local function UpdateCurrentWeapon(target)
     if not target then
         CurrentWeaponType = "Unknown"
-        EnemyWeaponRange = RANGE_DEFAULT
+        CurrentWeaponRange = RANGE_DEFAULT
         return
     end
     local hakudaType = GetHakudaType(target)
     if hakudaType then
         CurrentWeaponType = "Hakuda"
-        EnemyWeaponRange = GetWeaponRange("Hakuda", target)
+        CurrentWeaponRange = GetWeaponRange("Hakuda", target)
         return
     end
     local wm = GetWeaponModel(target)
     if wm then
         local wt = GetWeaponType(wm)
         CurrentWeaponType = (wt and wt ~= "Unknown") and wt or (wm.Name or "Unknown")
-        EnemyWeaponRange = GetWeaponRange(CurrentWeaponType, target)
+        CurrentWeaponRange = GetWeaponRange(CurrentWeaponType, target)
     else
         CurrentWeaponType = "Unknown"
-        EnemyWeaponRange = RANGE_DEFAULT
-    end
-end
-
-local function UpdateMyWeaponRange()
-    local myChar = GetChar()
-    if not myChar then
-        MyWeaponRange = 6.5
-        return
-    end
-    local myWeaponModel = GetWeaponModel(myChar)
-    if not myWeaponModel then
-        MyWeaponRange = 6.5
-        return
-    end
-    local myWeaponType = GetWeaponType(myWeaponModel)
-    if not myWeaponType or myWeaponType == "Unknown" then
-        MyWeaponRange = 6.5
-        return
-    end
-    if myWeaponType == "Hakuda" then
-        local hakudaType = GetHakudaType(myChar)
-        if hakudaType then
-            local hakudaEntry = WeaponLog["Hakuda"]
-            if hakudaEntry and hakudaEntry[hakudaType] then
-                MyWeaponRange = hakudaEntry[hakudaType].range
-                return
-            end
-        end
-        MyWeaponRange = 5.95
-        return
-    end
-    local entry = WeaponLog[myWeaponType]
-    if entry and entry.range then
-        MyWeaponRange = entry.range
-    else
-        MyWeaponRange = 6.5
+        CurrentWeaponRange = RANGE_DEFAULT
     end
 end
 
@@ -523,6 +473,7 @@ local Moves = {
     ["Uppercut"]        = { Action="parry",   Windup=0.500 },
     ["Spin Kick"]       = { Action="dodge",   Windup=0.600, DodgeDir="back" },
     ["Ground Slam"]     = { Action="dodge",   Windup=0.900, DodgeDir="back" },
+    --["Dash Strike"]     = { Action="counter", Windup=0.550 },
     ["Running Attack"]  = { Action="parry",   Windup=0.670 },
     ["False Cutter"]    = { Action="dodge",   Windup=0.735, DodgeDir="back", Signal="FalseCutterStart", SignalWindup=1.48 },
     ["Overhead Strike"] = { Action="dodge",   Windup=1.10,  DodgeDir="back" },
@@ -551,8 +502,15 @@ end
 local SignalNames = {}
 for k in pairs(SignalMoves) do SignalNames[#SignalNames+1] = k end
 
+local MoveOffset = {}
+local function GetMoveLead(moveName, base)
+    return base + (MoveOffset[moveName] or 0)
+end
+
+local RangeSquared = RANGE_DEFAULT * RANGE_DEFAULT
+
 local function UpdateRange()
-    RangeSquared = EnemyWeaponRange * EnemyWeaponRange
+    RangeSquared = CurrentWeaponRange * CurrentWeaponRange
 end
 
 local IsBlocking      = false
@@ -564,8 +522,19 @@ local LastParryTime   = 0
 local LastDodgeTime   = 0
 local LastActionTime  = 0
 
+local PendingSlot = nil
+local PendingType = nil
+local PendingAt   = 0
+
+local function SetPending(actionType, slot)
+    PendingType = actionType
+    PendingSlot = slot
+    PendingAt   = tick()
+end
+
 local CurrentTarget = nil
 local LastLockState = false
+local LastDebugKey  = false
 local MovePrev      = {}
 local MoveLast      = {}
 local SignalPrev    = {}
@@ -584,12 +553,8 @@ end
 local PrevClash      = false
 local PrevSignal     = false
 local PrevAttacking  = false
-
-local Stats = {
-    Parries = 0,
-    Dodges  = 0,
-    Blocks  = 0,
-}
+local PrevStunned    = false
+local PrevDeflecting = false
 
 local function ResetDetection()
     PrevClash = false; PrevSignal = false; PrevAttacking = false
@@ -613,12 +578,7 @@ end
 local function SetBlock(state)
     if state == IsBlocking then return end
     IsBlocking = state
-    if state then
-        KeyPress(KEY_BLOCK)
-        Stats.Blocks = Stats.Blocks + 1
-    else
-        KeyRelease(KEY_BLOCK)
-    end
+    if state then KeyPress(KEY_BLOCK) else KeyRelease(KEY_BLOCK) end
 end
 
 local function TapParry(reason, slot)
@@ -628,8 +588,8 @@ local function TapParry(reason, slot)
     ParryBusyAt   = tick()
     LastParryTime = tick()
     last_parry_attempt = tick()
+    SetPending("parry", slot)
     SignalWatch.FiredAt = tick()
-    Stats.Parries = Stats.Parries + 1
     Notify("PARRY")
     task.spawn(function()
         if not State.Running then IsParryBusy = false; return end
@@ -649,7 +609,7 @@ local function TapDodge(reason, direction)
     IsDodgeBusy   = true
     DodgeBusyAt   = tick()
     LastDodgeTime = tick()
-    Stats.Dodges = Stats.Dodges + 1
+    SetPending("dodge", nil)
     Notify("DODGE")
     task.spawn(function()
         if not State.Running then IsDodgeBusy = false; return end
@@ -664,17 +624,18 @@ end
 
 local function ExecuteMove(moveName, info, now, lead)
     if IsActionLocked(now) then return end
+    local totalLead = lead + (MoveOffset[moveName] or 0)
     LastActionTime = now
     ParryFire = {}; DodgeFire = {}
     PA_Reset()
     if info.Action == "dodge" then
-        local t = math.max(now + info.Windup - 0.20 - lead, now + 0.04)
+        local t = math.max(now + info.Windup - 0.20 - totalLead, now + 0.04)
         DodgeFire[moveName] = t
     elseif info.Action == "block" then
-        BlockStart = now + info.Windup - BLOCK_LEAD - lead
+        BlockStart = now + info.Windup - BLOCK_LEAD - totalLead
         BlockEnd   = BlockStart + (info.Hold or 0.5)
     else
-        local t = math.max(now + info.Windup - CLASH_TO_HIT - lead, now + 0.04)
+        local t = math.max(now + info.Windup - CLASH_TO_HIT - totalLead, now + 0.04)
         ParryFire[moveName] = t
     end
 end
@@ -736,17 +697,6 @@ local WeaponLabel = nil
 local PingLabel   = nil
 local DrawingsInitialized = false
 
-local Colors = {
-    MyRangeIn = Color3.fromRGB(0, 255, 0),
-    MyRangeOut = Color3.fromRGB(77, 179, 255),
-    EnemyRangeIn = Color3.fromRGB(255, 0, 0),
-    EnemyRangeOut = Color3.fromRGB(255, 255, 0),
-    EnemyRangeParry = Color3.fromRGB(0, 255, 255),
-    PingColor = Color3.fromRGB(255, 255, 255),
-    WeaponColor = Color3.fromRGB(51, 153, 255),
-    EnemyNameColor = Color3.fromRGB(255, 0, 0),
-}
-
 local function TrackDrawing(obj)
     State.Drawings[#State.Drawings+1] = obj
     return obj
@@ -761,6 +711,7 @@ local function KillDrawing(d)
         pcall(function() d:Destroy() end)
     end
 end
+
 State.Cleanup = function()
     for _, d in ipairs(State.Drawings) do KillDrawing(d) end
     State.Drawings = {}
@@ -776,23 +727,21 @@ local function InitDrawings()
     end
     EnemyLabel         = TrackDrawing(Drawing.new("Text"))
     EnemyLabel.Outline = true; EnemyLabel.Center = true
-    EnemyLabel.Size    = 16;   
-    EnemyLabel.Color   = Colors.EnemyNameColor
+    EnemyLabel.Size    = 16;   EnemyLabel.Color  = Color3.new(1,0,0)
     EnemyLabel.Visible = false
     WeaponLabel        = TrackDrawing(Drawing.new("Text"))
     WeaponLabel.Outline = true; WeaponLabel.Center = true
-    WeaponLabel.Size    = 13;   
-    WeaponLabel.Color   = Colors.WeaponColor
+    WeaponLabel.Size    = 13;   WeaponLabel.Color  = Color3.new(0.2,0.6,1)
     WeaponLabel.Visible = false
     PingLabel          = TrackDrawing(Drawing.new("Text"))
     PingLabel.Outline  = true; PingLabel.Center  = false
-    PingLabel.Size     = 14;   
-    PingLabel.Color    = Colors.PingColor
+    PingLabel.Size     = 14;   PingLabel.Color   = Color3.new(1,1,1)
     PingLabel.Visible  = false
     DrawingsInitialized = true
 end
 
 local function HideVisuals()
+    if not ShowRange then return end
     for i = 1, SEGMENTS do 
         if CircleLines[i] then CircleLines[i].Visible = false end
         if TargetCircleLines[i] then TargetCircleLines[i].Visible = false end
@@ -802,140 +751,124 @@ local function HideVisuals()
     if PingLabel  then PingLabel.Visible  = false end
 end
 
--- FIXED BUG 4: Hoisted dist calculations outside segment loop
 local function DrawVisuals(myRoot, targetRoot, target, mode, inRange)
-    local showRange   = GetShowRange()
-    local showPing    = GetShowPing()
-    local showWeapon  = GetShowWeapon()
-    local showName    = GetShowName()
-
-    if not showRange then
-        for i = 1, SEGMENTS do
-            if CircleLines[i] then CircleLines[i].Visible = false end
-            if TargetCircleLines[i] then TargetCircleLines[i].Visible = false end
+    if not ShowRange then return end
+    
+    InitDrawings()
+    
+    local step = TWO_PI / SEGMENTS
+    
+    local cx, cy, cz = myRoot.Position.X, myRoot.Position.Y - 3, myRoot.Position.Z
+    local pts, vis = {}, {}
+    local range = CurrentWeaponRange
+    for i = 0, SEGMENTS do
+        local a = i * step
+        if type(WorldToScreen) == "function" then
+            local sp, on = WorldToScreen(Vector3.new(
+                cx + math.cos(a)*range, cy, cz + math.sin(a)*range))
+            pts[i] = sp; vis[i] = on
+        else vis[i] = false end
+    end
+    for i = 1, SEGMENTS do
+        local ln = CircleLines[i]
+        if ln and vis[i-1] and vis[i] and pts[i-1] and pts[i] then
+            ln.From  = Vector2.new(pts[i-1].X, pts[i-1].Y)
+            ln.To    = Vector2.new(pts[i].X,   pts[i].Y)
+            if target and inRange then
+                ln.Color = Color3.new(0, 1, 0)
+            elseif target and not inRange then
+                ln.Color = Color3.new(1, 0, 0)
+            else
+                ln.Color = Color3.new(0.3, 0.7, 1)
+            end
+            ln.Visible = true
+        elseif ln then
+            ln.Visible = false
         end
-        if EnemyLabel then EnemyLabel.Visible = false end
-        if WeaponLabel then WeaponLabel.Visible = false end
-    else
-        InitDrawings()
-
-        local step = TWO_PI / SEGMENTS
-
-        -- FIXED BUG 4: Calculate these ONCE outside the loop
-        local inMyRange = false
-        local myRangeSq = MyWeaponRange * MyWeaponRange
-        if target and targetRoot then
-            inMyRange = DistSq(myRoot.Position, targetRoot.Position) <= myRangeSq
-        end
-
-        local cx, cy, cz = myRoot.Position.X, myRoot.Position.Y - 3, myRoot.Position.Z
-        local pts, vis = {}, {}
+    end
+    
+    if target and targetRoot then
+        local tx, ty, tz = targetRoot.Position.X, targetRoot.Position.Y - 3, targetRoot.Position.Z
+        local tpts, tvis = {}, {}
         for i = 0, SEGMENTS do
             local a = i * step
             if type(WorldToScreen) == "function" then
                 local sp, on = WorldToScreen(Vector3.new(
-                    cx + math.cos(a)*MyWeaponRange, cy, cz + math.sin(a)*MyWeaponRange))
-                pts[i] = sp; vis[i] = on
-            else vis[i] = false end
+                    tx + math.cos(a)*CurrentWeaponRange, ty, tz + math.sin(a)*CurrentWeaponRange))
+                tpts[i] = sp; tvis[i] = on
+            else tvis[i] = false end
         end
         for i = 1, SEGMENTS do
-            local ln = CircleLines[i]
-            if ln and vis[i-1] and vis[i] and pts[i-1] and pts[i] then
-                ln.From  = Vector2.new(pts[i-1].X, pts[i-1].Y)
-                ln.To    = Vector2.new(pts[i].X,   pts[i].Y)
-                ln.Color = inMyRange and Colors.MyRangeIn or Colors.MyRangeOut
+            local ln = TargetCircleLines[i]
+            if ln and tvis[i-1] and tvis[i] and tpts[i-1] and tpts[i] then
+                ln.From  = Vector2.new(tpts[i-1].X, tpts[i-1].Y)
+                ln.To    = Vector2.new(tpts[i].X,   tpts[i].Y)
+                if mode == "parry" or mode == "timed" then
+                    ln.Color = Color3.new(0, 1, 1)
+                elseif inRange then
+                    ln.Color = Color3.new(0, 1, 0)
+                else
+                    ln.Color = Color3.new(1, 0, 0)
+                end
                 ln.Visible = true
             elseif ln then
                 ln.Visible = false
             end
         end
-
-        if target and targetRoot then
-            local tx, ty, tz = targetRoot.Position.X, targetRoot.Position.Y - 3, targetRoot.Position.Z
-            local tpts, tvis = {}, {}
-            for i = 0, SEGMENTS do
-                local a = i * step
-                if type(WorldToScreen) == "function" then
-                    local sp, on = WorldToScreen(Vector3.new(
-                        tx + math.cos(a)*EnemyWeaponRange, ty, tz + math.sin(a)*EnemyWeaponRange))
-                    tpts[i] = sp; tvis[i] = on
-                else tvis[i] = false end
+        
+        local targetPos = targetRoot.Position + Vector3.new(0, 3.5, 0)
+        local lp, on = nil, false
+        if type(WorldToScreen) == "function" then
+            lp, on = WorldToScreen(targetPos)
+        end
+        if on and lp then
+            local nameY = lp.Y
+            if ShowName and EnemyLabel then
+                EnemyLabel.Text = GetDisplayName(target)
+                EnemyLabel.Position = Vector2.new(lp.X, nameY)
+                EnemyLabel.Color = Color3.new(1,0,0)
+                EnemyLabel.Visible = true
+                nameY = nameY + 20
+            elseif EnemyLabel then
+                EnemyLabel.Visible = false
             end
-            for i = 1, SEGMENTS do
-                local ln = TargetCircleLines[i]
-                if ln and tvis[i-1] and tvis[i] and tpts[i-1] and tpts[i] then
-                    ln.From  = Vector2.new(tpts[i-1].X, tpts[i-1].Y)
-                    ln.To    = Vector2.new(tpts[i].X,   tpts[i].Y)
-                    if mode == "parry" or mode == "timed" then
-                        ln.Color = Colors.EnemyRangeParry
-                    elseif inRange then
-                        ln.Color = Colors.EnemyRangeIn
-                    else
-                        ln.Color = Colors.EnemyRangeOut
+            if ShowWeapon and WeaponLabel then
+                local displayType = CurrentWeaponType
+                if displayType == "Hakuda" then
+                    local hakudaType = GetHakudaType(target)
+                    if hakudaType then
+                        displayType = "Hakuda - " .. hakudaType
                     end
-                    ln.Visible = true
-                elseif ln then
-                    ln.Visible = false
                 end
-            end
-
-            local targetPos = targetRoot.Position + Vector3.new(0, 3.5, 0)
-            local lp, on = nil, false
-            if type(WorldToScreen) == "function" then
-                lp, on = WorldToScreen(targetPos)
-            end
-            if on and lp then
-                local nameY = lp.Y
-                if showName and EnemyLabel then
-                    EnemyLabel.Text = GetDisplayName(target)
-                    EnemyLabel.Position = Vector2.new(lp.X, nameY)
-                    EnemyLabel.Color = Colors.EnemyNameColor
-                    EnemyLabel.Visible = true
-                    nameY = nameY + 20
-                elseif EnemyLabel then
-                    EnemyLabel.Visible = false
-                end
-                if showWeapon and WeaponLabel then
-                    local displayType = CurrentWeaponType
-                    if displayType == "Hakuda" then
-                        local hakudaType = GetHakudaType(target)
-                        if hakudaType then
-                            displayType = "Hakuda - " .. hakudaType
-                        end
-                    end
-                    WeaponLabel.Text = "[" .. displayType .. "]"
-                    WeaponLabel.Position = Vector2.new(lp.X, nameY)
-                    WeaponLabel.Color = Colors.WeaponColor
-                    WeaponLabel.Visible = true
-                elseif WeaponLabel then
-                    WeaponLabel.Visible = false
-                end
-            else
-                if EnemyLabel then EnemyLabel.Visible = false end
-                if WeaponLabel then WeaponLabel.Visible = false end
+                WeaponLabel.Text = "[" .. displayType .. "]"
+                WeaponLabel.Position = Vector2.new(lp.X, nameY)
+                WeaponLabel.Color = Color3.new(0.2,0.6,1)
+                WeaponLabel.Visible = true
+            elseif WeaponLabel then
+                WeaponLabel.Visible = false
             end
         else
             if EnemyLabel then EnemyLabel.Visible = false end
             if WeaponLabel then WeaponLabel.Visible = false end
-            for i = 1, SEGMENTS do
-                if TargetCircleLines[i] then TargetCircleLines[i].Visible = false end
-            end
+        end
+    else
+        if EnemyLabel then EnemyLabel.Visible = false end
+        if WeaponLabel then WeaponLabel.Visible = false end
+        for i = 1, SEGMENTS do
+            if TargetCircleLines[i] then TargetCircleLines[i].Visible = false end
         end
     end
-
+    
     if PingLabel then
-        if showPing then
-            InitDrawings()
-            local autoPing = GetAutoPing()
-            if autoPing and ping_api_works then
+        if ShowPing then
+            if AutoPing and ping_api_works then
                 PingLabel.Text = string.format("Ping: %.0fms", ping_smooth_ms)
-            elseif autoPing and not ping_api_works then
+            elseif AutoPing and not ping_api_works then
                 PingLabel.Text = string.format("Ping: %.0fms (Estimated)", ping_smooth_ms)
             else
                 PingLabel.Text = string.format("Ping: %.0fms (Manual)", ping_smooth_ms)
             end
             PingLabel.Position = Vector2.new(8, 15)
-            PingLabel.Color = Colors.PingColor
             PingLabel.Visible = true
         else
             PingLabel.Visible = false
@@ -948,267 +881,22 @@ LastKnownHealth = GetHealth()
 update_ping()
 Notify("VV AutoParry Initialised")
 
-local KeybindListening = nil
-local KeybindButtons = {}
-local KeybindClickTime = 0
-local KEYBIND_DELAY = 0.3
-
-local function StartKeybindCapture(configKey)
-    KeybindListening = configKey
-    KeybindClickTime = tick()
-    Notify("Press any key to bind " .. configKey .. "...", true)
-end
-
-local function TryUpdateButtonLabel(configKey, label)
-    local btn = KeybindButtons[configKey]
-    if not btn then return end
-    SafeCall(function() btn:SetText(label) end)
-    SafeCall(function() btn.Text = label end)
-    SafeCall(function() btn:Set(label) end)
-end
-
-local function CommitKeybind(configKey, code)
-    Cfg[configKey] = KeyCodeToLabel(code)
-    if configKey == "ToggleKey" then KEY_TOGGLE = code
-    elseif configKey == "BlockKey" then KEY_BLOCK = code
-    elseif configKey == "DodgeKey" then KEY_DODGE = code end
-    TryUpdateButtonLabel(configKey, configKey .. ": " .. KeyCodeToLabel(code))
-    Notify(configKey .. " bound to " .. KeyCodeToLabel(code), true)
-    KeybindListening = nil
-    KeybindClickTime = 0
-end
-
-local function PollKeybindCapture()
-    if not KeybindListening then return end
-    if type(iskeypressed) ~= "function" then
-        Notify("Key capture unsupported by this executor", true)
-        KeybindListening = nil
-        KeybindClickTime = 0
-        return
-    end
-    
-    local now = tick()
-    if now - KeybindClickTime < KEYBIND_DELAY then
-        return
-    end
-    
-    for _, code in ipairs(CaptureCandidates) do
-        if iskeypressed(code) then
-            CommitKeybind(KeybindListening, code)
-            return
-        end
-    end
-end
-
--- FIXED BUG 3: Lib is now safely loaded with fallback
-if type(Lib) == "table" then
-    Lib:SetTheme({
-        accentA = Color3.fromRGB(82, 122, 246),
-        accentB = Color3.fromRGB(120, 152, 255),
-        bg      = Color3.fromRGB(10, 12, 18),
-        sidebar = Color3.fromRGB(13, 15, 22),
-    })
-
-    local win = Lib:CreateWindow({
-    title = "VV AutoParry", 
-    subtitle = "made by @yuhjinxx", 
-    size = Vector2.new(750, 600),
-    configName = "vva_autoparry", 
-    menuKey = "Insert",
-    autoSave = true, 
-    smartFps = true,
-    logo = "https://api.dicebear.com/9.x/initials/png?seed=VV&backgroundColor=527af6,5b8cff&fontFamily=Verdana",
-})
-
-    Lib:SetPerformance(true)
-    Lib:SetOpacity(0.97)
-
-    local mainTab = win:Tab("Main", "settings")
-
-    local keybinds = mainTab:Section("Key Bindings", "Left", "configure control keys")
-    keybinds:Label("Click a button, then press any key to bind it")
-    keybinds:Divider()
-    KeybindButtons["ToggleKey"] = keybinds:Button("ToggleKey: " .. tostring(Cfg.ToggleKey), function()
-        StartKeybindCapture("ToggleKey")
-    end)
-    KeybindButtons["BlockKey"] = keybinds:Button("BlockKey: " .. tostring(Cfg.BlockKey), function()
-        StartKeybindCapture("BlockKey")
-    end)
-    KeybindButtons["DodgeKey"] = keybinds:Button("DodgeKey: " .. tostring(Cfg.DodgeKey), function()
-        StartKeybindCapture("DodgeKey")
-    end)
-
-    local combat = mainTab:Section("Combat Settings", "Right", "adjust combat behavior")
-    combat:Toggle("Health Check", Get("HealthCheck", true), function(v)
-        Cfg.HealthCheck = v
-        Notify("Health Check: " .. tostring(v), true)
-    end)
-    combat:Toggle("Fallback Mode", Get("FallbackEnabled", true), function(v)
-        Cfg.FallbackEnabled = v
-        Notify("Fallback Mode: " .. tostring(v), true)
-    end)
-    combat:Divider()
-    combat:Toggle("Auto Ping", Get("AutoPing", false), function(v)
-        Cfg.AutoPing = v
-        Notify("Auto Ping: " .. tostring(v), true)
-    end)
-    combat:Slider("Manual Ping (ms)", Get("PingMs", 10), 1, 0, 200, "ms", function(v)
-        Cfg.PingMs = v
-        Notify("Manual Ping: " .. tostring(v) .. "ms", true)
-    end)
-
-    local actions = mainTab:Section("Quick Actions", "Right", "quick access controls")
-    actions:Button("Find Target", function()
-        if not CurrentTarget then
-            CurrentTarget = GetClosestToCursor(); ResetDetection()
-            if CurrentTarget then
-                UpdateCurrentWeapon(CurrentTarget)
-                UpdateRange()
-                Notify("Locked: " .. GetDisplayName(CurrentTarget), true)
-            else
-                Notify("No target found", true)
-            end
-        else
-            Notify("Already locked: " .. GetDisplayName(CurrentTarget), true)
-        end
-    end)
-    actions:Button("Emergency Stop", function() 
-        Lib:Dialog({
-            title = "Emergency Stop?",
-            text = "This will immediately stop all actions. Continue?",
-            confirm = "Stop",
-            cancel = "Cancel",
-            onConfirm = function()
-                CurrentTarget = nil
-                SetBlock(false)
-                ResetDetection()
-                Notify("All actions stopped", true)
-            end,
-        })
-    end)
-
-    local visualTab = win:Tab("Visuals", "eye")
-
-    local display = visualTab:Section("Display Settings", "Left", "configure visual feedback")
-    display:Toggle("Show Range", Get("ShowRange", true), function(v)
-        Cfg.ShowRange = v
-        if not v then HideVisuals() end
-        Notify("Show Range: " .. tostring(v), true)
-    end)
-    display:Toggle("Show Ping", Get("ShowPing", true), function(v)
-        Cfg.ShowPing = v
-        Notify("Show Ping: " .. tostring(v), true)
-    end)
-    display:Toggle("Show Weapon Info", Get("ShowWeapon", true), function(v)
-        Cfg.ShowWeapon = v
-        Notify("Show Weapon: " .. tostring(v), true)
-    end)
-    display:Toggle("Show Enemy Name", Get("ShowName", true), function(v)
-        Cfg.ShowName = v
-        Notify("Show Name: " .. tostring(v), true)
-    end)
-    display:Divider()
-    display:Slider("UI Opacity", 95, 1, 50, 100, "%", function(v) 
-        Lib:SetOpacity(v / 100)
-    end)
-
-    local colorsSection = visualTab:Section("Range Colors", "Right", "customize range circle colors")
-    colorsSection:Label("My Range")
-    colorsSection:Colorpicker("In Range", Colors.MyRangeIn, function(c)
-        Colors.MyRangeIn = c
-    end)
-    colorsSection:Colorpicker("Out of Range", Colors.MyRangeOut, function(c)
-        Colors.MyRangeOut = c
-    end)
-    colorsSection:Divider()
-    colorsSection:Label("Enemy Range")
-    colorsSection:Colorpicker("In Range", Colors.EnemyRangeIn, function(c)
-        Colors.EnemyRangeIn = c
-    end)
-    colorsSection:Colorpicker("Out of Range", Colors.EnemyRangeOut, function(c)
-        Colors.EnemyRangeOut = c
-    end)
-    colorsSection:Colorpicker("Parry Mode", Colors.EnemyRangeParry, function(c)
-        Colors.EnemyRangeParry = c
-    end)
-
-    local textColors = visualTab:Section("Text Colors", "Left", "customize text label colors")
-    textColors:Colorpicker("Ping Color", Colors.PingColor, function(c)
-        Colors.PingColor = c
-    end)
-    textColors:Colorpicker("Weapon Info Color", Colors.WeaponColor, function(c)
-        Colors.WeaponColor = c
-    end)
-    textColors:Colorpicker("Enemy Name Color", Colors.EnemyNameColor, function(c)
-        Colors.EnemyNameColor = c
-    end)
-
-    local statusTab = win:Tab("Status", "user")
-    local statusInfo = statusTab:Section("Live Status", "Left", "live values are pushed via notifications")
-    statusInfo:Label("This panel doesn't refresh live.")
-    statusInfo:Label("Watch the notification popups instead:")
-    statusInfo:Label("• Target lock / unlock")
-    statusInfo:Label("• Parry / Dodge / Block events")
-    statusInfo:Divider()
-    statusInfo:Button("Show Current Stats", function()
-        Notify(string.format("Parries: %d | Dodges: %d | Blocks: %d",
-            Stats.Parries, Stats.Dodges, Stats.Blocks), true)
-    end)
-    statusInfo:Button("Show Current Target", function()
-        if CurrentTarget then
-            Notify("Target: " .. GetDisplayName(CurrentTarget) .. " | Weapon: " .. CurrentWeaponType, true)
-        else
-            Notify("No target locked", true)
-        end
-    end)
-    statusInfo:Button("Reset Statistics", function()
-        Lib:Dialog({
-            title = "Reset Statistics?",
-            text = "This will reset all stat counters. Continue?",
-            confirm = "Reset",
-            cancel = "Cancel",
-            onConfirm = function()
-                Stats.Parries = 0; Stats.Dodges = 0; Stats.Blocks = 0
-                Notify("Statistics reset", true)
-            end,
-        })
-    end)
-
-    local creditinfo = statusTab:Section("Credits", "Right", "People that made ts")
-    creditinfo:Label("CREDITS")
-    creditinfo:Divider()
-    creditinfo:Label("Original Script - @unkamui")
-    creditinfo:Label("Remastered Version - @yuhjinxx")
-    creditinfo:Label("User Interface - @inspecttor")
-    creditinfo:Label("Optimization - Claude by Anthropic Studios")
-    win:AddSettingsTab("cog")
-
-    Lib:Notify("VV AutoParry", "Press Insert to toggle menu | " .. _G.VV_AutoParry.ToggleKey .. " to lock target", 5)
-end
-
--- Main loop with proper teardown
 while State.Running do
     local ok, err = pcall(function()
-        if not State.Running then return end
-        
         task.wait()
         if not State.Running then return end
         local now = tick()
-
-        PollKeybindCapture()
-
         update_ping()
         update_adaptive_ping(now)
         CheckStuckBusy(now)
-        
-        UpdateMyWeaponRange()
+
         
         local lockPressed = type(iskeypressed) == "function" and iskeypressed(KEY_TOGGLE) or false
         if lockPressed and not LastLockState then
             if CurrentTarget then
                 CurrentTarget = nil; SetBlock(false); ResetDetection()
                 CurrentWeaponType = "Unknown"
-                EnemyWeaponRange = RANGE_DEFAULT
+                CurrentWeaponRange = RANGE_DEFAULT
                 Notify("Unlocked", true)
             else
                 CurrentTarget = GetClosestToCursor(); ResetDetection()
@@ -1231,14 +919,12 @@ while State.Running do
         local targetRoot  = nil
         local currentMode = nil
         local inRange = false
-        local healthCheck = GetHealthCheck()
-        local fallbackEnabled = GetFallbackEnabled()
         
-        if CurrentTarget and healthCheck then
+        if CurrentTarget and HealthCheck then
             local hrp = GetHRP(CurrentTarget)
             if not hrp or not CurrentTarget.Parent then
                 CurrentTarget = nil; CurrentWeaponType = "Unknown"
-                EnemyWeaponRange = RANGE_DEFAULT
+                CurrentWeaponRange = RANGE_DEFAULT
                 SetBlock(false); ResetDetection(); Notify("Target lost", true)
             end
         end
@@ -1276,16 +962,17 @@ while State.Running do
                 
                 local namedMoveTriggered = false
                 for _, moveName in ipairs(MoveNames) do
-                    -- FIXED BUG 5: Removed dead "Shunpo" check since it doesn't exist
-                    local info    = Moves[moveName]
-                    local present = IsAttackPresent(CurrentTarget, moveName)
-                    if present and not MovePrev[moveName]
-                       and (now - (MoveLast[moveName] or -999)) > MOVE_COOLDOWN then
-                        MoveLast[moveName] = now
-                        ExecuteMove(moveName, info, now, lead)
-                        namedMoveTriggered = true
+                    if moveName ~= "Shunpo" then
+                        local info    = Moves[moveName]
+                        local present = IsAttackPresent(CurrentTarget, moveName)
+                        if present and not MovePrev[moveName]
+                           and (now - (MoveLast[moveName] or -999)) > MOVE_COOLDOWN then
+                            MoveLast[moveName] = now
+                            ExecuteMove(moveName, info, now, lead)
+                            namedMoveTriggered = true
+                        end
+                        MovePrev[moveName] = present
                     end
-                    MovePrev[moveName] = present
                 end
                 
                 for _, sigName in ipairs(SignalNames) do
@@ -1340,8 +1027,8 @@ while State.Running do
                                   or (SelfHasEffect(CLASH_EFFECT) and IsEnemyAttacking(CurrentTarget))
                     
                     if PA.State == "IDLE" and signalActive and not PrevSignal
-                       and not IsActionLocked(now) and fallbackEnabled then
-                        local fireAt = ComputeFireAt(SignalWatch.StartedAt, CurrentWeaponType, CurrentTarget)
+                       and not IsActionLocked(now) and FallbackEnabled then
+                        local fireAt = ComputeFireAt(SignalWatch.StartedAt, CurrentWeaponType)
                         fireAt = math.max(fireAt, now + 0.04)
                         PA.State  = "SIGNAL_WAIT"
                         PA.FireAt = fireAt
@@ -1382,7 +1069,7 @@ while State.Running do
             end
         else
             CurrentTarget = nil; CurrentWeaponType = "Unknown"
-            EnemyWeaponRange = RANGE_DEFAULT
+            CurrentWeaponRange = RANGE_DEFAULT
             ResetDetection()
             if not IsParryBusy and not IsDodgeBusy then SetBlock(false) end
         end
