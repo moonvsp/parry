@@ -1,12 +1,13 @@
--- Originally made by @unkamui
--- Remastered by @yuhjinxx
+-- // Originally made by @unkamui
+-- // Remastered by @yuhjinxx
+-- // Anti-Skid Police wyd
 
 _G.VV_AutoParry = {
     ToggleKey       = "G",
     BlockKey        = "F",
     DodgeKey        = "Q",
     PingMs          = 10,
-    AutoPing        = false,
+    AutoPing        = true,
     ShowRange       = true,
     FallbackEnabled = true,
     HealthCheck     = true,
@@ -19,24 +20,24 @@ _G.VV_WeaponLog = {
     ["Club"]        = { timing = 0.600, range = 6.88 },
     ["DualKatana"]  = { timing = 0.550, range = 6.25 },
     ["Hakuda"] = {
-        ["Fists"] =    { timing = 0.380, range = 5.95 },
-        ["Boxing"] =   { timing = 0.420, range = 5.8 },
-        ["Karate"] =   { timing = 0.425, range = 6 },
-        ["MuayThai"] = { timing = 0.425, range = 6.1 },
+        ["Fists"]     = { timing = 0.380, range = 5.95 },
+        ["Boxing"]    = { timing = 0.420, range = 5.8  },
+        ["Karate"]    = { timing = 0.425, range = 6    },
+        ["MuayThai"]  = { timing = 0.425, range = 6.1  },
         ["Wrestling"] = { timing = 0.470, range = 6.05 },
     },
     ["Flail"]       = { timing = 0.770, range = 6.25 },
-    ["Greataxe"]    = { timing = 0.550, range = 6.7 },
-    ["Greatsword"]  = { timing = 0.600, range = 7 },
-    ["Hammer"]      = { timing = 0.890, range = 6.7 },
+    ["Greataxe"]    = { timing = 0.550, range = 6.7  },
+    ["Greatsword"]  = { timing = 0.600, range = 7    },
+    ["Hammer"]      = { timing = 0.890, range = 6.7  },
     ["Katana"]      = { timing = 0.510, range = 6.25 },
     ["Lance"]       = { timing = 0.630, range = 7.45 },
     ["Minigun"]     = { timing = 0.500, range = 7.05 },
-    ["Nunchucks"]   = { timing = 0.640, range = 6 },
-    ["Odachi"]      = { timing = 0.510, range = 6.8 },
-    ["Rapier"]      = { timing = 0.440, range = 6.5 },
-    ["ReishiGun"]   = { timing = 0.700, range = 7.125 },
-    ["Rifle"]       = { timing = 0.460, range = 6.6 },
+    ["Nunchucks"]   = { timing = 0.640, range = 6    },
+    ["Odachi"]      = { timing = 0.510, range = 6.8  },
+    ["Rapier"]      = { timing = 0.440, range = 6.5  },
+    ["ReishiGun"]   = { timing = 0.700, range = 7.125},
+    ["Rifle"]       = { timing = 0.460, range = 6.6  },
     ["Scythe"]      = { timing = 0.450, range = 6.95 },
     ["Spear"]       = { timing = 0.500, range = 13.3 },
     ["Tanto"]       = { timing = 0.510, range = 6.05 },
@@ -46,10 +47,11 @@ local Players     = game:GetService("Players")
 local Workspace   = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local Mouse       = LocalPlayer:GetMouse()
+local Camera      = Workspace.CurrentCamera
 
-local WeaponLog = _G.VV_WeaponLog or {}
+local WeaponLog      = _G.VV_WeaponLog or {}
 local TIMING_DEFAULT = 0.42
-local RANGE_DEFAULT = 14
+local RANGE_DEFAULT  = 14
 
 local InstanceKey = "VVUltiParrybyJinx"
 do
@@ -110,9 +112,7 @@ local function GetHakudaType(target)
     if not hakuda then return nil end
     local hakudaTypes = {"Fists", "Boxing", "Karate", "MuayThai", "Wrestling"}
     for _, typeName in ipairs(hakudaTypes) do
-        if hakuda:FindFirstChild(typeName) then
-            return typeName
-        end
+        if hakuda:FindFirstChild(typeName) then return typeName end
     end
     return "Fists"
 end
@@ -121,22 +121,56 @@ local function GetWeaponType(weaponModel)
     if not weaponModel then return "Unknown" end
     local wt = weaponModel:FindFirstChild("WeaponType")
     if wt then
-        if type(wt.Value) == "string" and #wt.Value > 0 then 
-            if weaponModel.Name:find("Hakuda") or wt.Value == "Hakuda" then
-                return "Hakuda"
-            end
-            return wt.Value 
-        end
+        if type(wt.Value) == "string" and #wt.Value > 0 then return wt.Value end
         if type(wt.Value) == "number" then
             local names = {
                 [0]="Fists",[1]="Sword",[2]="Katana",[3]="Greatsword",
                 [4]="Scythe",[5]="Hammer",[6]="Rapier",[7]="Lance",
-                [8]="Minigun",[9]="DualKatana"
+                [8]="Minigun",[9]="DualKatana",[10]="Club",[11]="Flail",
+                [12]="Greataxe",[13]="Nunchucks",[14]="Odachi",[15]="ReishiGun",
+                [16]="Rifle",[17]="Spear",[18]="Tanto"
             }
             return names[wt.Value] or ("Weapon_"..tostring(wt.Value))
         end
     end
     return weaponModel.Name or "Unknown"
+end
+
+local function HasEffect(model, name)
+    local s = GetStatus(model)
+    return s ~= nil and s:FindFirstChild(name) ~= nil
+end
+
+local function SelfHasEffect(name)
+    return HasEffect(GetChar(), name)
+end
+
+local PingMs = 0
+
+local function GetPingMsFromConfig()
+    local v = _G.VV_AutoParry.PingMs
+    return type(v) == "number" and math.max(0, v) or 10
+end
+
+local function GetAutoPingEnabled()
+    return _G.VV_AutoParry.AutoPing == true
+end
+
+local function UpdatePing()
+    if GetAutoPingEnabled() then
+        if type(GetPingValue) == "function" then
+            local p = SafeCall(GetPingValue)
+            if type(p) == "number" and p > 0 then
+                PingMs = p
+                return
+            end
+        end
+    end
+    PingMs = GetPingMsFromConfig()
+end
+
+local function GetPingLead()
+    return math.max(PingMs, 0) / 1000
 end
 
 local function GetServerWindup(weaponType, target)
@@ -170,19 +204,70 @@ local function GetWeaponRange(weaponType, target)
         return 5.95
     end
     local entry = WeaponLog[weaponType]
-    if entry and type(entry.range) == "number" then
-        return entry.range
-    end
+    if entry and type(entry.range) == "number" then return entry.range end
     return RANGE_DEFAULT
 end
 
-local function HasEffect(model, name)
-    local s = GetStatus(model)
-    return s ~= nil and s:FindFirstChild(name) ~= nil
+local function ComputeFireAt(signalStartedAt, weaponType, target)
+    local windup   = GetServerWindup(weaponType, target)
+    local ping     = GetPingLead()
+    local holdHalf = 0.18
+    return signalStartedAt + windup - holdHalf - ping
 end
 
-local function SelfHasEffect(name)
-    return HasEffect(GetChar(), name)
+local CurrentWeaponType = "Unknown"
+local EnemyWeaponRange  = RANGE_DEFAULT
+local MyWeaponRange     = 6.5
+local RangeSquared      = RANGE_DEFAULT * RANGE_DEFAULT
+
+local function UpdateRange()
+    RangeSquared = EnemyWeaponRange * EnemyWeaponRange
+end
+
+local function UpdateCurrentWeapon(target)
+    if not target then
+        CurrentWeaponType = "Unknown"
+        EnemyWeaponRange  = RANGE_DEFAULT
+        return
+    end
+    local hakudaType = GetHakudaType(target)
+    if hakudaType then
+        CurrentWeaponType = "Hakuda"
+        EnemyWeaponRange  = GetWeaponRange("Hakuda", target)
+        return
+    end
+    local wm = GetWeaponModel(target)
+    if wm then
+        local wt = GetWeaponType(wm)
+        CurrentWeaponType = (wt and wt ~= "Unknown") and wt or (wm.Name or "Unknown")
+        EnemyWeaponRange  = GetWeaponRange(CurrentWeaponType, target)
+    else
+        CurrentWeaponType = "Unknown"
+        EnemyWeaponRange  = RANGE_DEFAULT
+    end
+end
+
+local function UpdateMyWeaponRange()
+    local myChar = GetChar()
+    if not myChar then MyWeaponRange = 6.5; return end
+    local myWeaponModel = GetWeaponModel(myChar)
+    if not myWeaponModel then MyWeaponRange = 6.5; return end
+    local myWeaponType = GetWeaponType(myWeaponModel)
+    if not myWeaponType or myWeaponType == "Unknown" then MyWeaponRange = 6.5; return end
+    if myWeaponType == "Hakuda" then
+        local hakudaType = GetHakudaType(myChar)
+        if hakudaType then
+            local hakudaEntry = WeaponLog["Hakuda"]
+            if hakudaEntry and hakudaEntry[hakudaType] then
+                MyWeaponRange = hakudaEntry[hakudaType].range
+                return
+            end
+        end
+        MyWeaponRange = 5.95
+        return
+    end
+    local entry = WeaponLog[myWeaponType]
+    MyWeaponRange = (entry and entry.range) or 6.5
 end
 
 local function IsAttackPresent(model, moveName)
@@ -197,17 +282,6 @@ local function IsEnemyAttacking(model)
     return HasEffect(model, "Attacking")
         or HasEffect(model, "AttackingCanBlock")
         or HasEffect(model, "AttackingSignal")
-end
-
-local function DistSq(a, b)
-    local dx, dy, dz = a.X-b.X, a.Y-b.Y, a.Z-b.Z
-    local r = dx*dx + dy*dy + dz*dz
-    return r == r and r or math.huge
-end
-
-local function GetDisplayName(model)
-    if model and type(model.Name) == "string" and #model.Name > 0 then return model.Name end
-    return "Enemy"
 end
 
 local SpecialKeys = {
@@ -254,280 +328,117 @@ for c = 0x41, 0x5A do CaptureCandidates[#CaptureCandidates+1] = c end
 for _, code in pairs(SpecialKeys) do
     local dup = false
     for _, existing in ipairs(CaptureCandidates) do
-        if existing == code then dup = true break end
+        if existing == code then dup = true; break end
     end
     if not dup then CaptureCandidates[#CaptureCandidates+1] = code end
 end
 
-local Cfg = (_G and _G.VV_AutoParry) or {}
-local function Get(key, default)
+local Cfg = _G.VV_AutoParry
+local function GetCfg(key, default)
     local val = Cfg[key]
-    if val == nil then
-        return default
-    end
+    if val == nil then return default end
     return val
 end
 
-local KEY_TOGGLE  = ResolveKey(Get("ToggleKey",  "G"), "G")
-local KEY_BLOCK   = ResolveKey(Get("BlockKey",   "F"), "F")
-local KEY_DODGE   = ResolveKey(Get("DodgeKey",   "Q"), "Q")
+local KEY_TOGGLE = ResolveKey(GetCfg("ToggleKey", "G"), "G")
+local KEY_BLOCK  = ResolveKey(GetCfg("BlockKey",  "F"), "F")
+local KEY_DODGE  = ResolveKey(GetCfg("DodgeKey",  "Q"), "Q")
 
-local function CfgBool(key, default)
-    local v = Cfg[key]
-    if v == nil then return default end
-    return v and true or false
+local IsBlocking   = false
+local IsParryBusy  = false
+local IsDodgeBusy  = false
+local ParryBusyAt  = 0
+local DodgeBusyAt  = 0
+local LastParryTime  = 0
+local LastDodgeTime  = 0
+local LastActionTime = 0
+local LastParryAttempt = 0
+
+local PARRY_HOLD     = 0.25
+local PARRY_COOLDOWN = 0.10
+local DODGE_DURATION = 0.18
+local DODGE_COOLDOWN = 0.10
+local ACTION_LOCKOUT = 0.20
+local BUSY_TIMEOUT   = 2.0
+
+local function IsActionLocked(now)
+    return (now - LastActionTime) < ACTION_LOCKOUT
 end
 
-local function CfgNum(key, default)
-    local v = Cfg[key]
-    if type(v) == "number" then return v end
-    return default
+local function CheckStuckBusy(now)
+    if IsParryBusy and (now - ParryBusyAt) > BUSY_TIMEOUT then IsParryBusy = false end
+    if IsDodgeBusy and (now - DodgeBusyAt) > BUSY_TIMEOUT then IsDodgeBusy = false end
 end
 
-local function GetPingMs()          return math.max(0, CfgNum("PingMs", 10)) end
-local function GetAutoPing()        return CfgBool("AutoPing", false) end
-local function GetShowRange()       return CfgBool("ShowRange", true) end
-local function GetFallbackEnabled() return CfgBool("FallbackEnabled", true) end
-local function GetHealthCheck()     return CfgBool("HealthCheck", true) end
-local function GetShowPing()        return CfgBool("ShowPing", true) end
-local function GetShowWeapon()      return CfgBool("ShowWeapon", true) end
-local function GetShowName()        return CfgBool("ShowName", true) end
+local Stats = { Parries=0, Dodges=0, Blocks=0 }
 
+local function SetBlock(state)
+    if state == IsBlocking then return end
+    IsBlocking = state
+    if state then
+        KeyPress(KEY_BLOCK)
+        Stats.Blocks = Stats.Blocks + 1
+    else
+        KeyRelease(KEY_BLOCK)
+    end
+end
 
-local RangeSquared = RANGE_DEFAULT * RANGE_DEFAULT
-
-local Lib = SafeCall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/neaxusxgod-png/INS-ui/main/uilib.lua"))()
-end, nil) or INSui
-
-local adaptive_comp_ms = 50
-local ADAPT_UP = 20
-local ADAPT_DOWN = 6
-local ADAPT_MAX = 450
-local ADAPT_MIN = 0
-local prev_self_stunned = false
-local prev_self_deflecting = false
-local last_parry_attempt = 0
-
-local JITTER_MULT = 1.15
-local PING_DEFAULT = 50
-local ping_raw_ms = -1
-local ping_smooth_ms = 0
-local ping_jitter_ms = 0
-local ping_initialized = false
-local ping_api_works = false
-local PING_EMA_ALPHA = 0.3
-local last_ping_poll = 0
-
-local function try_api_ping()
-    local p = SafeCall(function()
-        local v = LocalPlayer:GetNetworkPing()
-        if type(v) == "number" and v > 0 then return v * 1000 end
+local function TapParry(reason, slot)
+    if IsParryBusy then return false end
+    if tick() - LastParryTime < PARRY_COOLDOWN then return false end
+    IsParryBusy      = true
+    ParryBusyAt      = tick()
+    LastParryTime    = tick()
+    LastParryAttempt = tick()
+    Stats.Parries    = Stats.Parries + 1
+    task.spawn(function()
+        if not State.Running then IsParryBusy = false; return end
+        SetBlock(true)
+        Notify("PARRY")
+        task.wait(PARRY_HOLD)
+        SetBlock(false)
+        IsParryBusy = false
     end)
-    if type(p) == "number" and p > 0 then return p, true end
+    return true
+end
 
-    p = SafeCall(function()
-        return game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+local DirKeys = { back=0x53, left=0x41, right=0x44, forward=0x57 }
+
+local function TapDodge(reason, direction)
+    if IsDodgeBusy then return false end
+    if tick() - LastDodgeTime < DODGE_COOLDOWN then return false end
+    IsDodgeBusy   = true
+    DodgeBusyAt   = tick()
+    LastDodgeTime = tick()
+    Stats.Dodges  = Stats.Dodges + 1
+    Notify("DODGE")
+    task.spawn(function()
+        if not State.Running then IsDodgeBusy = false; return end
+        local dirKey = DirKeys[direction] or DirKeys.back
+        KeyPress(dirKey)
+        KeyPress(KEY_DODGE)
+        task.wait(DODGE_DURATION)
+        KeyRelease(KEY_DODGE)
+        KeyRelease(dirKey)
+        IsDodgeBusy = false
     end)
-    if type(p) == "number" and p > 0 then return p, true end
-
-    p = SafeCall(function()
-        for _, d in ipairs(game:GetService("Stats"):GetDescendants()) do
-            if d.Name == "Data Ping" or d.Name == "Ping" then
-                local v = d:GetValue()
-                if type(v) == "number" and v > 0 then return v end
-            end
-        end
-    end)
-    if type(p) == "number" and p > 0 then return p, true end
-
-    return nil, false
+    return true
 end
-
-local function update_ping()
-    local autoPing = GetAutoPing()
-    local pingMs = GetPingMs()
-
-    if not autoPing then
-        ping_smooth_ms = pingMs
-        ping_raw_ms = pingMs
-        ping_initialized = true
-        ping_api_works = false
-        return
-    end
-
-    local now = tick()
-    if now - last_ping_poll < 0.5 then return end
-    last_ping_poll = now
-
-    local raw, ok = try_api_ping()
-    if ok and raw > 0 then
-        ping_api_works = true
-        ping_raw_ms = raw
-        if not ping_initialized then
-            ping_smooth_ms = raw
-            ping_initialized = true
-        else
-            ping_smooth_ms = ping_smooth_ms + PING_EMA_ALPHA * (raw - ping_smooth_ms)
-        end
-        local jitter = math.abs(raw - ping_smooth_ms)
-        ping_jitter_ms = ping_jitter_ms + PING_EMA_ALPHA * (jitter - ping_jitter_ms)
-    else
-        ping_api_works = false
-        ping_raw_ms = adaptive_comp_ms
-        ping_smooth_ms = adaptive_comp_ms
-        ping_jitter_ms = 0
-    end
-end
-
-local function get_ping_lead()
-    local autoPing = GetAutoPing()
-    if not autoPing then
-        return math.max(0, GetPingMs()) / 1000
-    end
-    local comp
-    if ping_api_works then
-        comp = ping_smooth_ms * JITTER_MULT + ping_jitter_ms
-    else
-        comp = adaptive_comp_ms
-    end
-    comp = math.max(comp, GetPingMs())
-    return comp / 1000
-end
-
-local function update_adaptive_ping(now)
-    local self_stunned_now = SelfHasEffect("Stunned") or SelfHasEffect("Ragdoll")
-    local self_deflect_now = SelfHasEffect("Deflecting") or SelfHasEffect("AutoParry") or SelfHasEffect("Riposte")
-
-    if self_stunned_now and not prev_self_stunned then
-        local since = now - last_parry_attempt
-        if since > 0 and since < 0.8 then
-            adaptive_comp_ms = math.min(adaptive_comp_ms + ADAPT_UP, ADAPT_MAX)
-        end
-    end
-
-    if self_deflect_now and not prev_self_deflecting then
-        local since = now - last_parry_attempt
-        if since > 0 and since < 0.8 then
-            adaptive_comp_ms = math.max(adaptive_comp_ms - ADAPT_DOWN, ADAPT_MIN)
-        end
-    end
-
-    prev_self_stunned = self_stunned_now
-    prev_self_deflecting = self_deflect_now
-end
-
-local function ComputeFireAt(signalStartedAt, weaponType, target)
-    local windup   = GetServerWindup(weaponType, target)
-    local ping     = get_ping_lead()
-    local holdHalf = 0.18
-    return signalStartedAt + windup - holdHalf - ping
-end
-
-local CurrentWeaponType = "Unknown"
-local EnemyWeaponRange = RANGE_DEFAULT
-local MyWeaponRange = 6.5
-
-local function UpdateCurrentWeapon(target)
-    if not target then
-        CurrentWeaponType = "Unknown"
-        EnemyWeaponRange = RANGE_DEFAULT
-        return
-    end
-    local hakudaType = GetHakudaType(target)
-    if hakudaType then
-        CurrentWeaponType = "Hakuda"
-        EnemyWeaponRange = GetWeaponRange("Hakuda", target)
-        return
-    end
-    local wm = GetWeaponModel(target)
-    if wm then
-        local wt = GetWeaponType(wm)
-        CurrentWeaponType = (wt and wt ~= "Unknown") and wt or (wm.Name or "Unknown")
-        EnemyWeaponRange = GetWeaponRange(CurrentWeaponType, target)
-    else
-        CurrentWeaponType = "Unknown"
-        EnemyWeaponRange = RANGE_DEFAULT
-    end
-end
-
-local function UpdateMyWeaponRange()
-    local myChar = GetChar()
-    if not myChar then
-        MyWeaponRange = 6.5
-        return
-    end
-    local myWeaponModel = GetWeaponModel(myChar)
-    if not myWeaponModel then
-        MyWeaponRange = 6.5
-        return
-    end
-    local myWeaponType = GetWeaponType(myWeaponModel)
-    if not myWeaponType or myWeaponType == "Unknown" then
-        MyWeaponRange = 6.5
-        return
-    end
-    if myWeaponType == "Hakuda" then
-        local hakudaType = GetHakudaType(myChar)
-        if hakudaType then
-            local hakudaEntry = WeaponLog["Hakuda"]
-            if hakudaEntry and hakudaEntry[hakudaType] then
-                MyWeaponRange = hakudaEntry[hakudaType].range
-                return
-            end
-        end
-        MyWeaponRange = 5.95
-        return
-    end
-    local entry = WeaponLog[myWeaponType]
-    if entry and entry.range then
-        MyWeaponRange = entry.range
-    else
-        MyWeaponRange = 6.5
-    end
-end
-
-local SignalWatch = {
-    Active    = false,
-    StartedAt = 0,
-    Weapon    = "Unknown",
-    FiredAt   = nil,
-    DidHit    = false,
-}
-
-local LastKnownHealth = nil
-local function GetHealth()
-    local char = GetChar()
-    local hum  = char and char:FindFirstChild("Humanoid")
-    return hum and hum.Health or nil
-end
-
-local CLASH_EFFECT     = "CanClash"
-local SIGNAL_EFFECT    = "AttackingSignal"
-local PARRY_HOLD       = 0.25
-local PARRY_COOLDOWN   = 0.10
-local CLASH_TO_HIT = 0.09
-local BLOCK_LEAD       = 0.15
-local MOVE_COOLDOWN    = 0.45
-local DODGE_DURATION   = 0.18
-local DODGE_COOLDOWN   = 0.10
-local ACTION_LOCKOUT   = 0.20
-local BUSY_TIMEOUT     = 2.0
 
 local Moves = {
-    ["Heavy Kick"]      = { Action="dodge",   Windup=0.555, DodgeDir="back" },
-    ["Uppercut"]        = { Action="parry",   Windup=0.500 },
-    ["Spin Kick"]       = { Action="dodge",   Windup=0.600, DodgeDir="back" },
-    ["Ground Slam"]     = { Action="dodge",   Windup=0.900, DodgeDir="back" },
-    ["Running Attack"]  = { Action="parry",   Windup=0.670 },
-    ["False Cutter"]    = { Action="dodge",   Windup=0.735, DodgeDir="back", Signal="FalseCutterStart", SignalWindup=1.48 },
-    ["Overhead Strike"] = { Action="dodge",   Windup=1.10,  DodgeDir="back" },
-    ["Skyscraper"]      = { Action="dodge",   Windup=0.80,  DodgeDir="back" },
-    ["AxeSlam"]         = { Action="dodge",   Windup=0.735, DodgeDir="back" },
-    ["Panther_Attack"]  = { Action="parry",   Windup=0.974 },
-    ["GelumAOE"]        = { Action="dodge",   Windup=2.00,  DodgeDir="back" },
-    ["GelumMeteor"]     = { Action="block",   Windup=0.552, Hold=0.50 },
-    ["Cyclone"]         = { Action="block",   Windup=0.670, Hold=0.60, Signal="MoveActive", SignalWindup=0.670 },
+    ["Heavy Kick"]      = { Action="dodge", Windup=0.555, DodgeDir="back" },
+    ["Uppercut"]        = { Action="parry", Windup=0.500 },
+    ["Spin Kick"]       = { Action="dodge", Windup=0.600, DodgeDir="back" },
+    ["Ground Slam"]     = { Action="dodge", Windup=0.900, DodgeDir="back" },
+    ["Running Attack"]  = { Action="parry", Windup=0.670 },
+    ["False Cutter"]    = { Action="dodge", Windup=0.735, DodgeDir="back", Signal="FalseCutterStart", SignalWindup=1.48 },
+    ["Overhead Strike"] = { Action="dodge", Windup=1.10,  DodgeDir="back" },
+    ["Skyscraper"]      = { Action="dodge", Windup=0.80,  DodgeDir="back" },
+    ["AxeSlam"]         = { Action="dodge", Windup=0.735, DodgeDir="back" },
+    ["Panther_Attack"]  = { Action="parry", Windup=0.974 },
+    ["GelumAOE"]        = { Action="dodge", Windup=2.00,  DodgeDir="back" },
+    ["GelumMeteor"]     = { Action="block", Windup=0.552, Hold=0.50 },
+    ["Cyclone"]         = { Action="block", Windup=0.670, Hold=0.60, Signal="MoveActive", SignalWindup=0.670 },
     ["ScorpionHollow_PoisonBreath"] = { Action="block", Windup=1.382, Hold=0.55 },
     ["Roar"]                        = { Action="block", Windup=0.30,  Hold=0.80 },
     ["ScorpionPoison"]              = { Action="block", Windup=0.25,  Hold=0.70 },
@@ -547,129 +458,23 @@ end
 local SignalNames = {}
 for k in pairs(SignalMoves) do SignalNames[#SignalNames+1] = k end
 
-local function UpdateRange()
-    RangeSquared = EnemyWeaponRange * EnemyWeaponRange
-end
+local BLOCK_LEAD    = 0.15
+local CLASH_TO_HIT  = 0.09
+local MOVE_COOLDOWN = 0.45
 
-local IsBlocking      = false
-local IsParryBusy     = false
-local IsDodgeBusy     = false
-local ParryBusyAt     = 0
-local DodgeBusyAt     = 0
-local LastParryTime   = 0
-local LastDodgeTime   = 0
-local LastActionTime  = 0
-
-local CurrentTarget = nil
-local LastLockState = false
-local MovePrev      = {}
-local MoveLast      = {}
-local SignalPrev    = {}
-local ParryFire     = {}
-local DodgeFire     = {}
-local BlockStart    = 0
-local BlockEnd      = 0
-
-local PA = { 
-    State="IDLE", 
-    FireAt=0, 
-    Slot=nil,
-    RetryCount=0
-}
-
-local function PA_Reset()
-    PA.State = "IDLE"
-    PA.FireAt = 0
-    PA.Slot = nil
-    PA.RetryCount = 0
-end
-
-local PrevClash      = false
-local PrevSignal     = false
-local PrevAttacking  = false
-
-local Stats = {
-    Parries = 0,
-    Dodges  = 0,
-    Blocks  = 0,
-}
-
-local function ResetDetection()
-    PrevClash = false; PrevSignal = false; PrevAttacking = false
-    MovePrev  = {};    MoveLast   = {}
-    SignalPrev = {};   ParryFire  = {}
-    DodgeFire  = {};   
-    BlockStart = 0;    BlockEnd   = 0
-    PA_Reset()
-    SignalWatch = { Active=false, StartedAt=0, Weapon="Unknown", FiredAt=nil, DidHit=false }
-end
-
-local function IsActionLocked(now)
-    return (now - LastActionTime) < ACTION_LOCKOUT
-end
-
-local function CheckStuckBusy(now)
-    if IsParryBusy   and (now - ParryBusyAt)   > BUSY_TIMEOUT then IsParryBusy   = false end
-    if IsDodgeBusy   and (now - DodgeBusyAt)   > BUSY_TIMEOUT then IsDodgeBusy   = false end
-end
-
-local function SetBlock(state)
-    if state == IsBlocking then return end
-    IsBlocking = state
-    if state then
-        KeyPress(KEY_BLOCK)
-        Stats.Blocks = Stats.Blocks + 1
-    else
-        KeyRelease(KEY_BLOCK)
-    end
-end
-
-local function TapParry(reason, slot)
-    if IsParryBusy then return false end
-    if tick() - LastParryTime < PARRY_COOLDOWN then return false end
-    IsParryBusy   = true
-    ParryBusyAt   = tick()
-    LastParryTime = tick()
-    last_parry_attempt = tick()
-    SignalWatch.FiredAt = tick()
-    Stats.Parries = Stats.Parries + 1
-   
-    task.spawn(function()
-        if not State.Running then print("bug here") IsParryBusy = false; return end
-        SetBlock(true) Notify("PARRY")
-        task.wait(PARRY_HOLD)
-        SetBlock(false)
-        IsParryBusy = false
-    end)
-    return true
-end
-
-local DirKeys = { back=0x53, left=0x41, right=0x44, forward=0x57 }
-
-local function TapDodge(reason, direction)
-    if IsDodgeBusy then return false end
-    if tick() - LastDodgeTime < DODGE_COOLDOWN then return false end
-    IsDodgeBusy   = true
-    DodgeBusyAt   = tick()
-    LastDodgeTime = tick()
-    Stats.Dodges = Stats.Dodges + 1
-    Notify("DODGE")
-    task.spawn(function()
-        if not State.Running then IsDodgeBusy = false; return end
-        local dirKey = DirKeys[direction] or DirKeys.back
-        KeyPress(dirKey); KeyPress(KEY_DODGE)
-        task.wait(DODGE_DURATION)
-        KeyRelease(KEY_DODGE); KeyRelease(dirKey)
-        IsDodgeBusy = false
-    end)
-    return true
-end
+local ParryFire = {}
+local DodgeFire = {}
+local BlockStart = 0
+local BlockEnd   = 0
+local MovePrev   = {}
+local MoveLast   = {}
+local SignalPrev  = {}
 
 local function ExecuteMove(moveName, info, now, lead)
     if IsActionLocked(now) then return end
     LastActionTime = now
-    ParryFire = {}; DodgeFire = {}
-    PA_Reset()
+    ParryFire = {}
+    DodgeFire = {}
     if info.Action == "dodge" then
         local t = math.max(now + info.Windup - 0.20 - lead, now + 0.04)
         DodgeFire[moveName] = t
@@ -704,50 +509,120 @@ local function GetCandidates()
     return list
 end
 
+local function DistSq(a, b)
+    local dx, dy, dz = a.X-b.X, a.Y-b.Y, a.Z-b.Z
+    return dx*dx + dy*dy + dz*dz
+end
+
 local function GetClosestToCursor()
     local myRoot = GetMyRoot()
     if not myRoot then return nil end
     local mx, my = Mouse.X, Mouse.Y
-    local bs, bsd = nil, math.huge
-    local bw, bwd = nil, math.huge
+    local bestScreen, bestScreenDist = nil, math.huge
+    local bestWorld,  bestWorldDist  = nil, math.huge
+
+    local worldToScreen = WorldToScreen
+    if type(worldToScreen) ~= "function" then
+        worldToScreen = function(pos)
+            local cam = Camera
+            if not cam then return nil, false end
+            local vec, onScreen = cam:WorldToScreenPoint(pos)
+            return Vector2.new(vec.X, vec.Y), onScreen
+        end
+    end
+
     for _, model in ipairs(GetCandidates()) do
         if IsEnemy(model) then
             local hrp = GetHRP(model)
             if hrp then
                 local wd = DistSq(hrp.Position, myRoot.Position)
-                if wd < bwd then bwd = wd; bw = model end
-                if type(WorldToScreen) == "function" then
-                    local sp, on = WorldToScreen(hrp.Position)
-                    if on and sp then
-                        local dx, dy = sp.X-mx, sp.Y-my
-                        local sd = dx*dx + dy*dy
-                        if sd < bsd then bsd = sd; bs = model end
-                    end
+                if wd < bestWorldDist then bestWorldDist = wd; bestWorld = model end
+                local sp, on = worldToScreen(hrp.Position)
+                if on and sp then
+                    local dx, dy = sp.X-mx, sp.Y-my
+                    local sd = dx*dx + dy*dy
+                    if sd < bestScreenDist then bestScreenDist = sd; bestScreen = model end
                 end
             end
         end
     end
-    return bs or bw
+    return bestScreen or bestWorld
+end
+
+local function GetDisplayName(model)
+    if model and type(model.Name) == "string" and #model.Name > 0 then return model.Name end
+    return "Enemy"
+end
+
+local SignalWatch = {
+    Active    = false,
+    StartedAt = 0,
+    Weapon    = "Unknown",
+    FiredAt   = nil,
+    DidHit    = false,
+}
+
+local ParryAttempt = { State="IDLE", FireAt=0, Slot=nil, RetryCount=0 }
+local function ResetParryAttempt()
+    ParryAttempt.State      = "IDLE"
+    ParryAttempt.FireAt     = 0
+    ParryAttempt.Slot       = nil
+    ParryAttempt.RetryCount = 0
+end
+
+local CurrentTarget = nil
+local LastLockState = false
+local PrevClash     = false
+local PrevSignal    = false
+local PrevAttacking = false
+
+local function ResetDetection()
+    PrevClash     = false
+    PrevSignal    = false
+    PrevAttacking = false
+    MovePrev   = {}
+    MoveLast   = {}
+    SignalPrev = {}
+    ParryFire  = {}
+    DodgeFire  = {}
+    BlockStart = 0
+    BlockEnd   = 0
+    ResetParryAttempt()
+    SignalWatch.Active = false
 end
 
 local SEGMENTS = 16
 local TWO_PI   = math.pi * 2
-local CircleLines = {}
+local CircleLines       = {}
 local TargetCircleLines = {}
 local EnemyLabel  = nil
 local WeaponLabel = nil
 local PingLabel   = nil
 local DrawingsInitialized = false
 
+local VISUAL_HZ       = 1 / 30
+local LastVisualUpdate = 0
+local LastMyPos        = Vector3.new(0, 0, 0)
+local LastTargetPos    = Vector3.new(0, 0, 0)
+local LastMyRange      = 0
+local LastEnemyRange   = 0
+local LastMode         = nil
+local LastInRange      = false
+local CachedMyPts      = {}
+local CachedMyVis      = {}
+local CachedTargetPts  = {}
+local CachedTargetVis  = {}
+local MOVE_THRESH_SQ   = 0.25
+
 local Colors = {
-    MyRangeIn = Color3.fromRGB(0, 255, 0),
-    MyRangeOut = Color3.fromRGB(77, 179, 255),
-    EnemyRangeIn = Color3.fromRGB(255, 0, 0),
-    EnemyRangeOut = Color3.fromRGB(255, 255, 0),
+    MyRangeIn       = Color3.fromRGB(0, 255, 0),
+    MyRangeOut      = Color3.fromRGB(77, 179, 255),
+    EnemyRangeIn    = Color3.fromRGB(255, 0, 0),
+    EnemyRangeOut   = Color3.fromRGB(255, 255, 0),
     EnemyRangeParry = Color3.fromRGB(0, 255, 255),
-    PingColor = Color3.fromRGB(255, 255, 255),
-    WeaponColor = Color3.fromRGB(51, 153, 255),
-    EnemyNameColor = Color3.fromRGB(255, 0, 0),
+    PingColor       = Color3.fromRGB(255, 255, 255),
+    WeaponColor     = Color3.fromRGB(51, 153, 255),
+    EnemyNameColor  = Color3.fromRGB(255, 0, 0),
 }
 
 local function TrackDrawing(obj)
@@ -758,11 +633,8 @@ end
 local function KillDrawing(d)
     if not d then return end
     pcall(function() d.Visible = false end)
-    if type(d.Remove) == "function" then
-        pcall(function() d:Remove() end)
-    elseif type(d.Destroy) == "function" then
-        pcall(function() d:Destroy() end)
-    end
+    if type(d.Remove)  == "function" then pcall(function() d:Remove()  end) end
+    if type(d.Destroy) == "function" then pcall(function() d:Destroy() end) end
 end
 State.Cleanup = function()
     for _, d in ipairs(State.Drawings) do KillDrawing(d) end
@@ -777,121 +649,129 @@ local function InitDrawings()
         local ln2 = TrackDrawing(Drawing.new("Line"))
         ln2.Thickness = 2; ln2.Visible = false; TargetCircleLines[i] = ln2
     end
-    EnemyLabel         = TrackDrawing(Drawing.new("Text"))
+    EnemyLabel = TrackDrawing(Drawing.new("Text"))
     EnemyLabel.Outline = true; EnemyLabel.Center = true
-    EnemyLabel.Size    = 16;   
-    EnemyLabel.Color   = Colors.EnemyNameColor
+    EnemyLabel.Size = 16; EnemyLabel.Color = Colors.EnemyNameColor
     EnemyLabel.Visible = false
-    WeaponLabel        = TrackDrawing(Drawing.new("Text"))
+    WeaponLabel = TrackDrawing(Drawing.new("Text"))
     WeaponLabel.Outline = true; WeaponLabel.Center = true
-    WeaponLabel.Size    = 13;   
-    WeaponLabel.Color   = Colors.WeaponColor
+    WeaponLabel.Size = 13; WeaponLabel.Color = Colors.WeaponColor
     WeaponLabel.Visible = false
-    PingLabel          = TrackDrawing(Drawing.new("Text"))
-    PingLabel.Outline  = true; PingLabel.Center  = false
-    PingLabel.Size     = 14;   
-    PingLabel.Color    = Colors.PingColor
-    PingLabel.Visible  = false
+    PingLabel = TrackDrawing(Drawing.new("Text"))
+    PingLabel.Outline = true; PingLabel.Center = false
+    PingLabel.Size = 14; PingLabel.Color = Colors.PingColor
+    PingLabel.Visible = false
     DrawingsInitialized = true
 end
 
 local function HideVisuals()
-    for i = 1, SEGMENTS do 
-        if CircleLines[i] then CircleLines[i].Visible = false end
+    for i = 1, SEGMENTS do
+        if CircleLines[i]       then CircleLines[i].Visible       = false end
         if TargetCircleLines[i] then TargetCircleLines[i].Visible = false end
     end
-    if EnemyLabel then EnemyLabel.Visible = false end
+    if EnemyLabel  then EnemyLabel.Visible  = false end
     if WeaponLabel then WeaponLabel.Visible = false end
-    if PingLabel  then PingLabel.Visible  = false end
+    if PingLabel   then PingLabel.Visible   = false end
 end
 
-local function DrawVisuals(myRoot, targetRoot, target, mode, inRange)
-    local showRange   = GetShowRange()
-    local showPing    = GetShowPing()
-    local showWeapon  = GetShowWeapon()
-    local showName    = GetShowName()
+local function WorldToScreenSafe(pos)
+    if type(WorldToScreen) == "function" then
+        return WorldToScreen(pos)
+    end
+    local cam = Camera
+    if not cam then return nil, false end
+    local vec, on = cam:WorldToScreenPoint(pos)
+    return Vector2.new(vec.X, vec.Y), on
+end
+
+local function RebuildCirclePoints(cx, cy, cz, radius, ptsOut, visOut)
+    local step = TWO_PI / SEGMENTS
+    for i = 0, SEGMENTS do
+        local a = i * step
+        local sp, on = WorldToScreenSafe(Vector3.new(
+            cx + math.cos(a) * radius, cy, cz + math.sin(a) * radius))
+        ptsOut[i] = sp
+        visOut[i] = on
+    end
+end
+
+local function ApplyCircleColor(lines, pts, vis, color)
+    for i = 1, SEGMENTS do
+        local ln = lines[i]
+        if ln and vis[i-1] and vis[i] and pts[i-1] and pts[i] then
+            ln.From    = Vector2.new(pts[i-1].X, pts[i-1].Y)
+            ln.To      = Vector2.new(pts[i].X,   pts[i].Y)
+            ln.Color   = color
+            ln.Visible = true
+        elseif ln then
+            ln.Visible = false
+        end
+    end
+end
+
+local function DrawVisuals(myRoot, targetRoot, target, mode, inRange, now)
+    local showRange  = _G.VV_AutoParry.ShowRange
+    local showPing   = _G.VV_AutoParry.ShowPing
+    local showWeapon = _G.VV_AutoParry.ShowWeapon
+    local showName   = _G.VV_AutoParry.ShowName
 
     if not showRange then
         for i = 1, SEGMENTS do
-            if CircleLines[i] then CircleLines[i].Visible = false end
+            if CircleLines[i]       then CircleLines[i].Visible       = false end
             if TargetCircleLines[i] then TargetCircleLines[i].Visible = false end
         end
-        if EnemyLabel then EnemyLabel.Visible = false end
+        if EnemyLabel  then EnemyLabel.Visible  = false end
         if WeaponLabel then WeaponLabel.Visible = false end
     else
         InitDrawings()
 
-        local step = TWO_PI / SEGMENTS
+        local myPos     = myRoot.Position
+        local myMoved   = DistSq(myPos, LastMyPos) > MOVE_THRESH_SQ
+        local rangeDiff = MyWeaponRange ~= LastMyRange
+
+        if myMoved or rangeDiff or (now - LastVisualUpdate) >= VISUAL_HZ then
+            RebuildCirclePoints(myPos.X, myPos.Y - 3, myPos.Z, MyWeaponRange, CachedMyPts, CachedMyVis)
+            LastMyPos   = myPos
+            LastMyRange = MyWeaponRange
+        end
 
         local inMyRange = false
-        local myRangeSq = MyWeaponRange * MyWeaponRange
         if target and targetRoot then
-            inMyRange = DistSq(myRoot.Position, targetRoot.Position) <= myRangeSq
+            inMyRange = DistSq(myPos, targetRoot.Position) <= (MyWeaponRange * MyWeaponRange)
         end
-
-        local cx, cy, cz = myRoot.Position.X, myRoot.Position.Y - 3, myRoot.Position.Z
-        local pts, vis = {}, {}
-        for i = 0, SEGMENTS do
-            local a = i * step
-            if type(WorldToScreen) == "function" then
-                local sp, on = WorldToScreen(Vector3.new(
-                    cx + math.cos(a)*MyWeaponRange, cy, cz + math.sin(a)*MyWeaponRange))
-                pts[i] = sp; vis[i] = on
-            else vis[i] = false end
-        end
-        for i = 1, SEGMENTS do
-            local ln = CircleLines[i]
-            if ln and vis[i-1] and vis[i] and pts[i-1] and pts[i] then
-                ln.From  = Vector2.new(pts[i-1].X, pts[i-1].Y)
-                ln.To    = Vector2.new(pts[i].X,   pts[i].Y)
-                ln.Color = inMyRange and Colors.MyRangeIn or Colors.MyRangeOut
-                ln.Visible = true
-            elseif ln then
-                ln.Visible = false
-            end
-        end
+        ApplyCircleColor(CircleLines, CachedMyPts, CachedMyVis,
+            inMyRange and Colors.MyRangeIn or Colors.MyRangeOut)
 
         if target and targetRoot then
-            local tx, ty, tz = targetRoot.Position.X, targetRoot.Position.Y - 3, targetRoot.Position.Z
-            local tpts, tvis = {}, {}
-            for i = 0, SEGMENTS do
-                local a = i * step
-                if type(WorldToScreen) == "function" then
-                    local sp, on = WorldToScreen(Vector3.new(
-                        tx + math.cos(a)*EnemyWeaponRange, ty, tz + math.sin(a)*EnemyWeaponRange))
-                    tpts[i] = sp; tvis[i] = on
-                else tvis[i] = false end
-            end
-            for i = 1, SEGMENTS do
-                local ln = TargetCircleLines[i]
-                if ln and tvis[i-1] and tvis[i] and tpts[i-1] and tpts[i] then
-                    ln.From  = Vector2.new(tpts[i-1].X, tpts[i-1].Y)
-                    ln.To    = Vector2.new(tpts[i].X,   tpts[i].Y)
-                    if mode == "parry" or mode == "timed" then
-                        ln.Color = Colors.EnemyRangeParry
-                    elseif inRange then
-                        ln.Color = Colors.EnemyRangeIn
-                    else
-                        ln.Color = Colors.EnemyRangeOut
-                    end
-                    ln.Visible = true
-                elseif ln then
-                    ln.Visible = false
-                end
+            local tPos      = targetRoot.Position
+            local tMoved    = DistSq(tPos, LastTargetPos) > MOVE_THRESH_SQ
+            local tRangeDiff = EnemyWeaponRange ~= LastEnemyRange
+
+            if tMoved or tRangeDiff or mode ~= LastMode or inRange ~= LastInRange
+               or (now - LastVisualUpdate) >= VISUAL_HZ then
+                RebuildCirclePoints(tPos.X, tPos.Y - 3, tPos.Z, EnemyWeaponRange, CachedTargetPts, CachedTargetVis)
+                LastTargetPos  = tPos
+                LastEnemyRange = EnemyWeaponRange
             end
 
-            local targetPos = targetRoot.Position + Vector3.new(0, 3.5, 0)
-            local lp, on = nil, false
-            if type(WorldToScreen) == "function" then
-                lp, on = WorldToScreen(targetPos)
+            local enemyColor
+            if mode == "parry" or mode == "timed" then
+                enemyColor = Colors.EnemyRangeParry
+            elseif inRange then
+                enemyColor = Colors.EnemyRangeIn
+            else
+                enemyColor = Colors.EnemyRangeOut
             end
+            ApplyCircleColor(TargetCircleLines, CachedTargetPts, CachedTargetVis, enemyColor)
+
+            local lp, on = WorldToScreenSafe(tPos + Vector3.new(0, 3.5, 0))
             if on and lp then
                 local nameY = lp.Y
                 if showName and EnemyLabel then
-                    EnemyLabel.Text = GetDisplayName(target)
+                    EnemyLabel.Text     = GetDisplayName(target)
                     EnemyLabel.Position = Vector2.new(lp.X, nameY)
-                    EnemyLabel.Color = Colors.EnemyNameColor
-                    EnemyLabel.Visible = true
+                    EnemyLabel.Color    = Colors.EnemyNameColor
+                    EnemyLabel.Visible  = true
                     nameY = nameY + 20
                 elseif EnemyLabel then
                     EnemyLabel.Visible = false
@@ -899,60 +779,56 @@ local function DrawVisuals(myRoot, targetRoot, target, mode, inRange)
                 if showWeapon and WeaponLabel then
                     local displayType = CurrentWeaponType
                     if displayType == "Hakuda" then
-                        local hakudaType = GetHakudaType(target)
-                        if hakudaType then
-                            displayType = "Hakuda - " .. hakudaType
-                        end
+                        local ht = GetHakudaType(target)
+                        if ht then displayType = "Hakuda - " .. ht end
                     end
-                    WeaponLabel.Text = "[" .. displayType .. "]"
+                    WeaponLabel.Text     = "[" .. displayType .. "]"
                     WeaponLabel.Position = Vector2.new(lp.X, nameY)
-                    WeaponLabel.Color = Colors.WeaponColor
-                    WeaponLabel.Visible = true
+                    WeaponLabel.Color    = Colors.WeaponColor
+                    WeaponLabel.Visible  = true
                 elseif WeaponLabel then
                     WeaponLabel.Visible = false
                 end
             else
-                if EnemyLabel then EnemyLabel.Visible = false end
+                if EnemyLabel  then EnemyLabel.Visible  = false end
                 if WeaponLabel then WeaponLabel.Visible = false end
             end
         else
-            if EnemyLabel then EnemyLabel.Visible = false end
+            if EnemyLabel  then EnemyLabel.Visible  = false end
             if WeaponLabel then WeaponLabel.Visible = false end
             for i = 1, SEGMENTS do
                 if TargetCircleLines[i] then TargetCircleLines[i].Visible = false end
             end
+            CachedTargetPts = {}
+            CachedTargetVis = {}
+            LastTargetPos   = Vector3.new(0, 0, 0)
         end
+
+        LastMode         = mode
+        LastInRange      = inRange
+        LastVisualUpdate = now
     end
 
     if PingLabel then
         if showPing then
             InitDrawings()
-            local autoPing = GetAutoPing()
-            if autoPing and ping_api_works then
-                PingLabel.Text = string.format("Ping: %.0fms", ping_smooth_ms)
-            elseif autoPing and not ping_api_works then
-                PingLabel.Text = string.format("Ping: %.0fms (Estimated)", ping_smooth_ms)
-            else
-                PingLabel.Text = string.format("Ping: %.0fms (Manual)", ping_smooth_ms)
-            end
+            local label = GetAutoPingEnabled()
+                and string.format("Ping: %.0fms", PingMs)
+                or  string.format("Ping: %.0fms (Manual)", PingMs)
+            PingLabel.Text     = label
             PingLabel.Position = Vector2.new(8, 15)
-            PingLabel.Color = Colors.PingColor
-            PingLabel.Visible = true
+            PingLabel.Color    = Colors.PingColor
+            PingLabel.Visible  = true
         else
             PingLabel.Visible = false
         end
     end
 end
 
-if type(setrobloxinput) == "function" then SafeCall(function() setrobloxinput(true) end) end
-LastKnownHealth = GetHealth()
-update_ping()
-Notify("VV AutoParry Initialised")
-
 local KeybindListening = nil
-local KeybindButtons = {}
+local KeybindButtons   = {}
 local KeybindClickTime = 0
-local KEYBIND_DELAY = 0.3
+local KEYBIND_DELAY    = 0.3
 
 local function StartKeybindCapture(configKey)
     KeybindListening = configKey
@@ -987,12 +863,8 @@ local function PollKeybindCapture()
         KeybindClickTime = 0
         return
     end
-    
     local now = tick()
-    if now - KeybindClickTime < KEYBIND_DELAY then
-        return
-    end
-    
+    if now - KeybindClickTime < KEYBIND_DELAY then return end
     for _, code in ipairs(CaptureCandidates) do
         if iskeypressed(code) then
             CommitKeybind(KeybindListening, code)
@@ -1000,6 +872,11 @@ local function PollKeybindCapture()
         end
     end
 end
+
+local Lib = SafeCall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/neaxusxgod-png/INS-ui/main/uilib.lua"))()
+end, nil) or INSui
+
 if type(Lib) == "table" then
     Lib:SetTheme({
         accentA = Color3.fromRGB(82, 122, 246),
@@ -1009,15 +886,15 @@ if type(Lib) == "table" then
     })
 
     local win = Lib:CreateWindow({
-    title = "VV AutoParry", 
-    subtitle = "made by @yuhjinxx", 
-    size = Vector2.new(750, 600),
-    configName = "vva_autoparry", 
-    menuKey = "Insert",
-    autoSave = true, 
-    smartFps = true,
-    logo = "https://api.dicebear.com/9.x/initials/png?seed=VV&backgroundColor=527af6,5b8cff&fontFamily=Verdana",
-})
+        title      = "VV AutoParry",
+        subtitle   = "made by @yuhjinxx",
+        size       = Vector2.new(750, 600),
+        configName = "vva_autoparry",
+        menuKey    = "Insert",
+        autoSave   = true,
+        smartFps   = true,
+        logo       = "https://tr.rbxcdn.com/180DAY-b37eb206561635a8e049057f69b046a2/150/150/Image/Webp/noFilter",
+    })
 
     Lib:SetPerformance(true)
     Lib:SetOpacity(0.97)
@@ -1038,28 +915,29 @@ if type(Lib) == "table" then
     end)
 
     local combat = mainTab:Section("Combat Settings", "Right", "adjust combat behavior")
-    combat:Toggle("Health Check", Get("HealthCheck", true), function(v)
-        Cfg.HealthCheck = v
+    combat:Toggle("Health Check", GetCfg("HealthCheck", true), function(v)
+        _G.VV_AutoParry.HealthCheck = v
         Notify("Health Check: " .. tostring(v), true)
     end)
-    combat:Toggle("Fallback Mode", Get("FallbackEnabled", true), function(v)
-        Cfg.FallbackEnabled = v
+    combat:Toggle("Fallback Mode", GetCfg("FallbackEnabled", true), function(v)
+        _G.VV_AutoParry.FallbackEnabled = v
         Notify("Fallback Mode: " .. tostring(v), true)
     end)
     combat:Divider()
-    combat:Toggle("Auto Ping", Get("AutoPing", false), function(v)
-        Cfg.AutoPing = v
+    combat:Toggle("Auto Ping", GetCfg("AutoPing", true), function(v)
+        _G.VV_AutoParry.AutoPing = v
         Notify("Auto Ping: " .. tostring(v), true)
     end)
-    combat:Slider("Manual Ping (ms)", Get("PingMs", 10), 1, 0, 200, "ms", function(v)
-        Cfg.PingMs = v
+    combat:Slider("Manual Ping (ms)", GetCfg("PingMs", 10), 1, 0, 200, "ms", function(v)
+        _G.VV_AutoParry.PingMs = v
         Notify("Manual Ping: " .. tostring(v) .. "ms", true)
     end)
 
     local actions = mainTab:Section("Quick Actions", "Right", "quick access controls")
     actions:Button("Find Target", function()
         if not CurrentTarget then
-            CurrentTarget = GetClosestToCursor(); ResetDetection()
+            CurrentTarget = GetClosestToCursor()
+            ResetDetection()
             if CurrentTarget then
                 UpdateCurrentWeapon(CurrentTarget)
                 UpdateRange()
@@ -1071,14 +949,16 @@ if type(Lib) == "table" then
             Notify("Already locked: " .. GetDisplayName(CurrentTarget), true)
         end
     end)
-    actions:Button("Emergency Stop", function() 
+    actions:Button("Emergency Stop", function()
         Lib:Dialog({
-            title = "Emergency Stop?",
-            text = "This will immediately stop all actions. Continue?",
+            title   = "Emergency Stop?",
+            text    = "This will immediately stop all actions. Continue?",
             confirm = "Stop",
-            cancel = "Cancel",
+            cancel  = "Cancel",
             onConfirm = function()
-                CurrentTarget = nil
+                CurrentTarget     = nil
+                CurrentWeaponType = "Unknown"
+                EnemyWeaponRange  = RANGE_DEFAULT
                 SetBlock(false)
                 ResetDetection()
                 Notify("All actions stopped", true)
@@ -1089,60 +969,44 @@ if type(Lib) == "table" then
     local visualTab = win:Tab("Visuals", "eye")
 
     local display = visualTab:Section("Display Settings", "Left", "configure visual feedback")
-    display:Toggle("Show Range", Get("ShowRange", true), function(v)
-        Cfg.ShowRange = v
+    display:Toggle("Show Range", GetCfg("ShowRange", true), function(v)
+        _G.VV_AutoParry.ShowRange = v
         if not v then HideVisuals() end
         Notify("Show Range: " .. tostring(v), true)
     end)
-    display:Toggle("Show Ping", Get("ShowPing", true), function(v)
-        Cfg.ShowPing = v
+    display:Toggle("Show Ping", GetCfg("ShowPing", true), function(v)
+        _G.VV_AutoParry.ShowPing = v
         Notify("Show Ping: " .. tostring(v), true)
     end)
-    display:Toggle("Show Weapon Info", Get("ShowWeapon", true), function(v)
-        Cfg.ShowWeapon = v
+    display:Toggle("Show Weapon Info", GetCfg("ShowWeapon", true), function(v)
+        _G.VV_AutoParry.ShowWeapon = v
         Notify("Show Weapon: " .. tostring(v), true)
     end)
-    display:Toggle("Show Enemy Name", Get("ShowName", true), function(v)
-        Cfg.ShowName = v
+    display:Toggle("Show Enemy Name", GetCfg("ShowName", true), function(v)
+        _G.VV_AutoParry.ShowName = v
         Notify("Show Name: " .. tostring(v), true)
     end)
     display:Divider()
-    display:Slider("UI Opacity", 95, 1, 50, 100, "%", function(v) 
+    display:Slider("UI Opacity", 95, 1, 50, 100, "%", function(v)
         Lib:SetOpacity(v / 100)
     end)
 
     local colorsSection = visualTab:Section("Range Colors", "Right", "customize range circle colors")
     colorsSection:Label("My Range")
-    colorsSection:Colorpicker("In Range", Colors.MyRangeIn, function(c)
-        Colors.MyRangeIn = c
-    end)
-    colorsSection:Colorpicker("Out of Range", Colors.MyRangeOut, function(c)
-        Colors.MyRangeOut = c
-    end)
+    colorsSection:Colorpicker("In Range",     Colors.MyRangeIn,  function(c) Colors.MyRangeIn  = c end)
+    colorsSection:Colorpicker("Out of Range", Colors.MyRangeOut, function(c) Colors.MyRangeOut = c end)
     colorsSection:Divider()
     colorsSection:Label("Enemy Range")
-    colorsSection:Colorpicker("In Range", Colors.EnemyRangeIn, function(c)
-        Colors.EnemyRangeIn = c
-    end)
-    colorsSection:Colorpicker("Out of Range", Colors.EnemyRangeOut, function(c)
-        Colors.EnemyRangeOut = c
-    end)
-    colorsSection:Colorpicker("Parry Mode", Colors.EnemyRangeParry, function(c)
-        Colors.EnemyRangeParry = c
-    end)
+    colorsSection:Colorpicker("In Range",     Colors.EnemyRangeIn,    function(c) Colors.EnemyRangeIn    = c end)
+    colorsSection:Colorpicker("Out of Range", Colors.EnemyRangeOut,   function(c) Colors.EnemyRangeOut   = c end)
+    colorsSection:Colorpicker("Parry Mode",   Colors.EnemyRangeParry, function(c) Colors.EnemyRangeParry = c end)
 
     local textColors = visualTab:Section("Text Colors", "Left", "customize text label colors")
-    textColors:Colorpicker("Ping Color", Colors.PingColor, function(c)
-        Colors.PingColor = c
-    end)
-    textColors:Colorpicker("Weapon Info Color", Colors.WeaponColor, function(c)
-        Colors.WeaponColor = c
-    end)
-    textColors:Colorpicker("Enemy Name Color", Colors.EnemyNameColor, function(c)
-        Colors.EnemyNameColor = c
-    end)
+    textColors:Colorpicker("Ping Color",        Colors.PingColor,      function(c) Colors.PingColor      = c end)
+    textColors:Colorpicker("Weapon Info Color", Colors.WeaponColor,    function(c) Colors.WeaponColor    = c end)
+    textColors:Colorpicker("Enemy Name Color",  Colors.EnemyNameColor, function(c) Colors.EnemyNameColor = c end)
 
-    local statusTab = win:Tab("Status", "user")
+    local statusTab  = win:Tab("Status", "user")
     local statusInfo = statusTab:Section("Live Status", "Left", "live values are pushed via notifications")
     statusInfo:Label("This panel doesn't refresh live.")
     statusInfo:Label("Watch the notification popups instead:")
@@ -1162,10 +1026,10 @@ if type(Lib) == "table" then
     end)
     statusInfo:Button("Reset Statistics", function()
         Lib:Dialog({
-            title = "Reset Statistics?",
-            text = "This will reset all stat counters. Continue?",
+            title   = "Reset Statistics?",
+            text    = "This will reset all stat counters. Continue?",
             confirm = "Reset",
-            cancel = "Cancel",
+            cancel  = "Cancel",
             onConfirm = function()
                 Stats.Parries = 0; Stats.Dodges = 0; Stats.Blocks = 0
                 Notify("Statistics reset", true)
@@ -1185,31 +1049,35 @@ if type(Lib) == "table" then
     Lib:Notify("VV AutoParry", "Press Insert to toggle menu | " .. _G.VV_AutoParry.ToggleKey .. " to lock target", 5)
 end
 
+if type(setrobloxinput) == "function" then SafeCall(function() setrobloxinput(true) end) end
+UpdatePing()
+Notify("VV AutoParry Initialised")
+
 while State.Running do
     local ok, err = pcall(function()
         if not State.Running then return end
-        
         task.wait()
         if not State.Running then return end
+
         local now = tick()
 
         PollKeybindCapture()
-
-        update_ping()
-        update_adaptive_ping(now)
+        UpdatePing()
         CheckStuckBusy(now)
-        
         UpdateMyWeaponRange()
-        
+
         local lockPressed = type(iskeypressed) == "function" and iskeypressed(KEY_TOGGLE) or false
         if lockPressed and not LastLockState then
             if CurrentTarget then
-                CurrentTarget = nil; SetBlock(false); ResetDetection()
+                CurrentTarget     = nil
                 CurrentWeaponType = "Unknown"
-                EnemyWeaponRange = RANGE_DEFAULT
+                EnemyWeaponRange  = RANGE_DEFAULT
+                SetBlock(false)
+                ResetDetection()
                 Notify("Unlocked", true)
             else
-                CurrentTarget = GetClosestToCursor(); ResetDetection()
+                CurrentTarget = GetClosestToCursor()
+                ResetDetection()
                 if CurrentTarget then
                     UpdateCurrentWeapon(CurrentTarget)
                     UpdateRange()
@@ -1220,35 +1088,42 @@ while State.Running do
             end
         end
         LastLockState = lockPressed
-        
+
         local myRoot = GetMyRoot()
         if not myRoot then
-            CurrentTarget = nil; SetBlock(false); ResetDetection(); HideVisuals(); return
+            CurrentTarget = nil
+            SetBlock(false)
+            ResetDetection()
+            HideVisuals()
+            return
         end
-        
-        local targetRoot  = nil
-        local currentMode = nil
-        local inRange = false
-        local healthCheck = GetHealthCheck()
-        local fallbackEnabled = GetFallbackEnabled()
-        
+
+        local targetRoot      = nil
+        local currentMode     = nil
+        local inRange         = false
+        local healthCheck     = GetCfg("HealthCheck", true)
+        local fallbackEnabled = GetCfg("FallbackEnabled", true)
+
         if CurrentTarget and healthCheck then
             local hrp = GetHRP(CurrentTarget)
             if not hrp or not CurrentTarget.Parent then
-                CurrentTarget = nil; CurrentWeaponType = "Unknown"
-                EnemyWeaponRange = RANGE_DEFAULT
-                SetBlock(false); ResetDetection(); Notify("Target lost", true)
+                CurrentTarget     = nil
+                CurrentWeaponType = "Unknown"
+                EnemyWeaponRange  = RANGE_DEFAULT
+                SetBlock(false)
+                ResetDetection()
+                Notify("Target lost", true)
             end
         end
-        
+
         if CurrentTarget and CurrentTarget.Parent and IsEnemy(CurrentTarget) then
             targetRoot = GetHRP(CurrentTarget)
             if targetRoot then
                 UpdateCurrentWeapon(CurrentTarget)
                 UpdateRange()
                 inRange = DistSq(targetRoot.Position, myRoot.Position) <= RangeSquared
-                local lead = get_ping_lead()
-                
+                local lead = GetPingLead()
+
                 local currentSignals = {}
                 local statusFolder = GetStatus(CurrentTarget)
                 if statusFolder then
@@ -1256,10 +1131,10 @@ while State.Running do
                         currentSignals[child.Name] = true
                     end
                 end
-                
-                local signalActive = currentSignals[SIGNAL_EFFECT]
+
+                local signalActive = currentSignals["AttackingSignal"]
                 if signalActive and not PrevSignal then
-                    PA_Reset()
+                    ResetParryAttempt()
                     SignalWatch = {
                         Active    = true,
                         StartedAt = now,
@@ -1269,12 +1144,11 @@ while State.Running do
                     }
                 elseif not signalActive and PrevSignal then
                     SignalWatch.Active = false
-                    if PA.State ~= "FIRED" then PA_Reset() end
+                    if ParryAttempt.State ~= "FIRED" then ResetParryAttempt() end
                 end
-                
+
                 local namedMoveTriggered = false
                 for _, moveName in ipairs(MoveNames) do
-    
                     local info    = Moves[moveName]
                     local present = IsAttackPresent(CurrentTarget, moveName)
                     if present and not MovePrev[moveName]
@@ -1285,7 +1159,7 @@ while State.Running do
                     end
                     MovePrev[moveName] = present
                 end
-                
+
                 for _, sigName in ipairs(SignalNames) do
                     local sigData = SignalMoves[sigName]
                     local present = currentSignals[sigName]
@@ -1304,7 +1178,7 @@ while State.Running do
                     end
                     SignalPrev[sigName] = present
                 end
-                
+
                 for moveName, fireAt in pairs(DodgeFire) do
                     if fireAt and now >= fireAt then
                         DodgeFire[moveName] = nil
@@ -1320,7 +1194,7 @@ while State.Running do
                         currentMode = "timed"
                     end
                 end
-                
+
                 local blockActive = false
                 if BlockStart ~= 0 then
                     if now >= BlockStart and now <= BlockEnd then
@@ -1329,78 +1203,82 @@ while State.Running do
                         BlockStart = 0; BlockEnd = 0
                     end
                 end
-                if blockActive then SetBlock(true); currentMode = "block" end
-                
+                if blockActive then
+                    SetBlock(true)
+                    currentMode = "block"
+                end
+
                 if not blockActive and not namedMoveTriggered
                    and next(ParryFire) == nil and next(DodgeFire) == nil
                    and BlockStart == 0 then
-                    local clashNow = HasEffect(CurrentTarget, CLASH_EFFECT)
-                                  or (SelfHasEffect(CLASH_EFFECT) and IsEnemyAttacking(CurrentTarget))
-                    
-                    if PA.State == "IDLE" and signalActive and not PrevSignal
+                    local clashNow = HasEffect(CurrentTarget, "CanClash")
+                                  or (SelfHasEffect("CanClash") and IsEnemyAttacking(CurrentTarget))
+
+                    if ParryAttempt.State == "IDLE" and signalActive and not PrevSignal
                        and not IsActionLocked(now) and fallbackEnabled then
                         local fireAt = ComputeFireAt(SignalWatch.StartedAt, CurrentWeaponType, CurrentTarget)
                         fireAt = math.max(fireAt, now + 0.04)
-                        PA.State  = "SIGNAL_WAIT"
-                        PA.FireAt = fireAt
-                        PA.Slot   = "M1"
+                        ParryAttempt.State  = "SIGNAL_WAIT"
+                        ParryAttempt.FireAt = fireAt
+                        ParryAttempt.Slot   = "M1"
                     end
-                    
-                    if PA.State == "SIGNAL_WAIT" and clashNow and not PrevClash then
-                        if now < PA.FireAt then
-                            PA.FireAt = now
+
+                    if ParryAttempt.State == "SIGNAL_WAIT" and clashNow and not PrevClash then
+                        if now < ParryAttempt.FireAt then
+                            ParryAttempt.FireAt = now
                         end
                     end
-                    
-                    if PA.State == "SIGNAL_WAIT" and now >= PA.FireAt then
+
+                    if ParryAttempt.State == "SIGNAL_WAIT" and now >= ParryAttempt.FireAt then
                         if not IsParryBusy and not IsDodgeBusy and not IsActionLocked(now) then
                             LastActionTime = now
                             local still_active = signalActive or clashNow or IsEnemyAttacking(CurrentTarget)
                             if still_active then
-                                TapParry("M1", PA.Slot)
-                                currentMode = "parry"
-                                PA.State = "FIRED"
-                                PA.RetryCount = 0
+                                TapParry("M1", ParryAttempt.Slot)
+                                currentMode             = "parry"
+                                ParryAttempt.State      = "FIRED"
+                                ParryAttempt.RetryCount = 0
                             else
-                                PA.State = "IDLE"
-                                PA_Reset()
+                                ResetParryAttempt()
                             end
                         else
-                            PA.RetryCount = PA.RetryCount + 1
-                            if PA.RetryCount > 10 or (now - PA.FireAt) > 0.5 then
-                                PA.State = "IDLE"
-                                PA_Reset()
+                            ParryAttempt.RetryCount = ParryAttempt.RetryCount + 1
+                            if ParryAttempt.RetryCount > 10 or (now - ParryAttempt.FireAt) > 0.5 then
+                                ResetParryAttempt()
                             end
                         end
                     end
-                    
-                    PrevClash    = clashNow
-                    PrevSignal   = signalActive
+
+                    PrevClash     = clashNow
+                    PrevSignal    = signalActive
                     PrevAttacking = IsEnemyAttacking(CurrentTarget)
                 else
-                    PrevClash    = HasEffect(CurrentTarget, CLASH_EFFECT)
-                    PrevSignal   = currentSignals[SIGNAL_EFFECT]
+                    PrevClash     = HasEffect(CurrentTarget, "CanClash")
+                    PrevSignal    = currentSignals["AttackingSignal"]
                     PrevAttacking = IsEnemyAttacking(CurrentTarget)
                 end
-                
+
                 if not blockActive and not IsParryBusy and not IsDodgeBusy then
                     SetBlock(false)
                 end
             end
         else
-            CurrentTarget = nil; CurrentWeaponType = "Unknown"
-            EnemyWeaponRange = RANGE_DEFAULT
+            CurrentTarget     = nil
+            CurrentWeaponType = "Unknown"
+            EnemyWeaponRange  = RANGE_DEFAULT
             ResetDetection()
             if not IsParryBusy and not IsDodgeBusy then SetBlock(false) end
         end
-        
-        DrawVisuals(myRoot, targetRoot, CurrentTarget, currentMode, inRange)
+
+        DrawVisuals(myRoot, targetRoot, CurrentTarget, currentMode, inRange, now)
     end)
     if not ok then warn("[VV AutoParry] " .. tostring(err)) end
 end
 
 if _G and _G[InstanceKey] == State then _G[InstanceKey] = nil end
 SetBlock(false)
-KeyRelease(KEY_BLOCK); KeyRelease(KEY_DODGE);
+KeyRelease(KEY_BLOCK)
+KeyRelease(KEY_DODGE)
 for _, dk in pairs(DirKeys) do KeyRelease(dk) end
-HideVisuals(); State.Cleanup()
+HideVisuals()
+State.Cleanup()
