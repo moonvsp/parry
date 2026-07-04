@@ -1,6 +1,5 @@
 -- // Originally made by @unkamui
 -- // Remastered by @yuhjinxx
--- // Anti-Skid Police wyd
 
 _G.VV_AutoParry = {
     ToggleKey       = "G",
@@ -133,7 +132,7 @@ local function GetWeaponType(weaponModel)
             return names[wt.Value] or ("Weapon_"..tostring(wt.Value))
         end
     end
-    return weaponModel.Name or "Unknown"
+    return "Unknown"
 end
 
 local function HasEffect(model, name)
@@ -239,7 +238,7 @@ local function UpdateCurrentWeapon(target)
     local wm = GetWeaponModel(target)
     if wm then
         local wt = GetWeaponType(wm)
-        CurrentWeaponType = (wt and wt ~= "Unknown") and wt or (wm.Name or "Unknown")
+        CurrentWeaponType = (wt and wt ~= "Unknown") and wt or "Unknown"
         EnemyWeaponRange  = GetWeaponRange(CurrentWeaponType, target)
     else
         CurrentWeaponType = "Unknown"
