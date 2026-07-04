@@ -1,19 +1,22 @@
 -- // Originally made by @unkamui
 -- // Remastered by @yuhjinxx
 
-_G.VV_AutoParry = {
-    ToggleKey       = "G",
-    BlockKey        = "F",
-    DodgeKey        = "Q",
-    PingMs          = 10,
-    AutoPing        = true,
-    ShowRange       = true,
-    FallbackEnabled = true,
-    HealthCheck     = true,
-    ShowPing        = true,
-    ShowWeapon      = true,
-    ShowName        = true,
-}
+-- Preserve existing config across re-executions instead of resetting binds every run
+if not _G.VV_AutoParry then
+    _G.VV_AutoParry = {
+        ToggleKey       = "G",
+        BlockKey        = "F",
+        DodgeKey        = "Q",
+        PingMs          = 10,
+        AutoPing        = true,
+        ShowRange       = true,
+        FallbackEnabled = true,
+        HealthCheck     = true,
+        ShowPing        = true,
+        ShowWeapon      = true,
+        ShowName        = true,
+    }
+end
 
 _G.VV_WeaponLog = {
     ["Club"]        = { timing = 0.600, range = 6.88 },
@@ -76,6 +79,51 @@ end
 local function KeyRelease(code)
     if type(keyrelease) == "function" then SafeCall(function() keyrelease(code) end) end
 end
+
+-- ===== Unified input layer: keyboard + mouse, for both capture and detection =====
+local MouseCodes = { [0x01]=true, [0x02]=true, [0x04]=true, [0x05]=true, [0x06]=true }
+
+local function IsBindPressed(code)
+    if type(code) ~= "number" then return false end
+
+    if MouseCodes[code] then
+        -- Prefer dedicated mouse-state functions if the executor exposes them
+        if code == 0x01 and type(ismouse1pressed) == "function" then
+            return SafeCall(ismouse1pressed, false) == true
+        end
+        if code == 0x02 and type(ismouse2pressed) == "function" then
+            return SafeCall(ismouse2pressed, false) == true
+        end
+        -- Fallback: many executors also let iskeypressed read VK_LBUTTON/RBUTTON/MBUTTON
+        if type(iskeypressed) == "function" then
+            return SafeCall(function() return iskeypressed(code) end, false) == true
+        end
+        return false
+    end
+
+    if type(iskeypressed) == "function" then
+        return SafeCall(function() return iskeypressed(code) end, false) == true
+    end
+    return false
+end
+
+-- For holding an action key down: uses mouseX press/release if available, else keypress/keyrelease
+local function DoPress(code)
+    if MouseCodes[code] then
+        if code == 0x01 and type(mouse1press) == "function" then SafeCall(mouse1press); return end
+        if code == 0x02 and type(mouse2press) == "function" then SafeCall(mouse2press); return end
+    end
+    KeyPress(code)
+end
+
+local function DoRelease(code)
+    if MouseCodes[code] then
+        if code == 0x01 and type(mouse1release) == "function" then SafeCall(mouse1release); return end
+        if code == 0x02 and type(mouse2release) == "function" then SafeCall(mouse2release); return end
+    end
+    KeyRelease(code)
+end
+-- ===================================================================================
 
 local LastNotify = 0
 local function Notify(msg, force)
@@ -283,6 +331,8 @@ local function IsEnemyAttacking(model)
         or HasEffect(model, "AttackingSignal")
 end
 
+-- Removed ambiguous Button1/Button2/Button3 duplicates (they collided with MouseButton1/2/3
+-- and made label lookups unpredictable). Added MouseButton4/5 for side buttons.
 local SpecialKeys = {
     F1=0x70,F2=0x71,F3=0x72,F4=0x73,F5=0x74,F6=0x75,
     F7=0x76,F8=0x77,F9=0x78,F10=0x79,F11=0x7A,F12=0x7B,
@@ -291,8 +341,8 @@ local SpecialKeys = {
     Escape=0x1B,Delete=0x2E,Insert=0x2D,
     Home=0x24,End=0x23,PageUp=0x21,PageDown=0x22,
     Up=0x26,Down=0x28,Left=0x25,Right=0x27,
-    Button1=0x01,Button2=0x02,Button3=0x04,
     MouseButton1=0x01,MouseButton2=0x02,MouseButton3=0x04,
+    MouseButton4=0x05,MouseButton5=0x06,
     NumPad0=0x60,NumPad1=0x61,NumPad2=0x62,NumPad3=0x63,
     NumPad4=0x64,NumPad5=0x65,NumPad6=0x66,NumPad7=0x67,
     NumPad8=0x68,NumPad9=0x69,NumPadMultiply=0x6A,
@@ -321,15 +371,11 @@ local function KeyCodeToLabel(code)
     return "0x" .. string.format("%X", code)
 end
 
+-- Full VK-code scan range instead of a narrow letters/digits/specials-only list,
+-- so any keyboard key or mouse button can be captured, not just a handful.
 local CaptureCandidates = {}
-for c = 0x30, 0x39 do CaptureCandidates[#CaptureCandidates+1] = c end
-for c = 0x41, 0x5A do CaptureCandidates[#CaptureCandidates+1] = c end
-for _, code in pairs(SpecialKeys) do
-    local dup = false
-    for _, existing in ipairs(CaptureCandidates) do
-        if existing == code then dup = true; break end
-    end
-    if not dup then CaptureCandidates[#CaptureCandidates+1] = code end
+for c = 1, 254 do
+    CaptureCandidates[#CaptureCandidates+1] = c
 end
 
 local Cfg = _G.VV_AutoParry
@@ -375,10 +421,10 @@ local function SetBlock(state)
     if state == IsBlocking then return end
     IsBlocking = state
     if state then
-        KeyPress(KEY_BLOCK)
+        DoPress(KEY_BLOCK)
         Stats.Blocks = Stats.Blocks + 1
     else
-        KeyRelease(KEY_BLOCK)
+        DoRelease(KEY_BLOCK)
     end
 end
 
@@ -415,9 +461,9 @@ local function TapDodge(reason, direction)
         if not State.Running then IsDodgeBusy = false; return end
         local dirKey = DirKeys[direction] or DirKeys.back
         KeyPress(dirKey)
-        KeyPress(KEY_DODGE)
+        DoPress(KEY_DODGE)
         task.wait(DODGE_DURATION)
-        KeyRelease(KEY_DODGE)
+        DoRelease(KEY_DODGE)
         KeyRelease(dirKey)
         IsDodgeBusy = false
     end)
@@ -832,7 +878,7 @@ local KEYBIND_DELAY    = 0.3
 local function StartKeybindCapture(configKey)
     KeybindListening = configKey
     KeybindClickTime = tick()
-    Notify("Press any key to bind " .. configKey .. "...", true)
+    Notify("Press any key or mouse button to bind " .. configKey .. "...", true)
 end
 
 local function TryUpdateButtonLabel(configKey, label)
@@ -856,16 +902,10 @@ end
 
 local function PollKeybindCapture()
     if not KeybindListening then return end
-    if type(iskeypressed) ~= "function" then
-        Notify("Key capture unsupported by this executor", true)
-        KeybindListening = nil
-        KeybindClickTime = 0
-        return
-    end
     local now = tick()
     if now - KeybindClickTime < KEYBIND_DELAY then return end
     for _, code in ipairs(CaptureCandidates) do
-        if iskeypressed(code) then
+        if IsBindPressed(code) then
             CommitKeybind(KeybindListening, code)
             return
         end
@@ -901,7 +941,7 @@ if type(Lib) == "table" then
     local mainTab = win:Tab("Main", "settings")
 
     local keybinds = mainTab:Section("Key Bindings", "Left", "configure control keys")
-    keybinds:Label("Click a button, then press any key to bind it")
+    keybinds:Label("Click a button, then press any key OR mouse button to bind it")
     keybinds:Divider()
     KeybindButtons["ToggleKey"] = keybinds:Button("ToggleKey: " .. tostring(Cfg.ToggleKey), function()
         StartKeybindCapture("ToggleKey")
@@ -1065,7 +1105,7 @@ while State.Running do
         CheckStuckBusy(now)
         UpdateMyWeaponRange()
 
-        local lockPressed = type(iskeypressed) == "function" and iskeypressed(KEY_TOGGLE) or false
+        local lockPressed = IsBindPressed(KEY_TOGGLE)
         if lockPressed and not LastLockState then
             if CurrentTarget then
                 CurrentTarget     = nil
@@ -1276,8 +1316,8 @@ end
 
 if _G and _G[InstanceKey] == State then _G[InstanceKey] = nil end
 SetBlock(false)
-KeyRelease(KEY_BLOCK)
-KeyRelease(KEY_DODGE)
+DoRelease(KEY_BLOCK)
+DoRelease(KEY_DODGE)
 for _, dk in pairs(DirKeys) do KeyRelease(dk) end
 HideVisuals()
 State.Cleanup()
