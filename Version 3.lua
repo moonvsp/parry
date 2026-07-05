@@ -1,20 +1,22 @@
 -- // Originally made by @unkamui
 -- // Remastered by @yuhjinxx
 
--- Preserve existing config across re-executions instead of resetting binds every run
 if not _G.VV_AutoParry then
     _G.VV_AutoParry = {
-        ToggleKey       = "G",
-        BlockKey        = "F",
-        DodgeKey        = "Q",
-        PingMs          = 10,
-        AutoPing        = true,
-        ShowRange       = true,
-        FallbackEnabled = true,
-        HealthCheck     = true,
-        ShowPing        = true,
-        ShowWeapon      = true,
-        ShowName        = true,
+        ToggleKey           = "G",
+        BlockKey            = "F",
+        DodgeKey            = "Q",
+        PingMs              = 10,
+        AutoPing            = true,
+        ShowRange           = true,
+        FallbackEnabled     = true,
+        HealthCheck         = true,
+        ShowPing            = true,
+        ShowWeapon          = true,
+        ShowName            = true,
+        IntermittentDodge   = false,
+        IntermittentDir     = "Back",
+        IntermittentChance  = 30,
     }
 end
 
@@ -80,34 +82,28 @@ local function KeyRelease(code)
     if type(keyrelease) == "function" then SafeCall(function() keyrelease(code) end) end
 end
 
--- ===== Unified input layer: keyboard + mouse, for both capture and detection =====
 local MouseCodes = { [0x01]=true, [0x02]=true, [0x04]=true, [0x05]=true, [0x06]=true }
 
 local function IsBindPressed(code)
     if type(code) ~= "number" then return false end
-
     if MouseCodes[code] then
-        -- Prefer dedicated mouse-state functions if the executor exposes them
         if code == 0x01 and type(ismouse1pressed) == "function" then
             return SafeCall(ismouse1pressed, false) == true
         end
         if code == 0x02 and type(ismouse2pressed) == "function" then
             return SafeCall(ismouse2pressed, false) == true
         end
-        -- Fallback: many executors also let iskeypressed read VK_LBUTTON/RBUTTON/MBUTTON
         if type(iskeypressed) == "function" then
             return SafeCall(function() return iskeypressed(code) end, false) == true
         end
         return false
     end
-
     if type(iskeypressed) == "function" then
         return SafeCall(function() return iskeypressed(code) end, false) == true
     end
     return false
 end
 
--- For holding an action key down: uses mouseX press/release if available, else keypress/keyrelease
 local function DoPress(code)
     if MouseCodes[code] then
         if code == 0x01 and type(mouse1press) == "function" then SafeCall(mouse1press); return end
@@ -123,7 +119,6 @@ local function DoRelease(code)
     end
     KeyRelease(code)
 end
--- ===================================================================================
 
 local LastNotify = 0
 local function Notify(msg, force)
@@ -331,8 +326,6 @@ local function IsEnemyAttacking(model)
         or HasEffect(model, "AttackingSignal")
 end
 
--- Removed ambiguous Button1/Button2/Button3 duplicates (they collided with MouseButton1/2/3
--- and made label lookups unpredictable). Added MouseButton4/5 for side buttons.
 local SpecialKeys = {
     F1=0x70,F2=0x71,F3=0x72,F4=0x73,F5=0x74,F6=0x75,
     F7=0x76,F8=0x77,F9=0x78,F10=0x79,F11=0x7A,F12=0x7B,
@@ -371,8 +364,6 @@ local function KeyCodeToLabel(code)
     return "0x" .. string.format("%X", code)
 end
 
--- Full VK-code scan range instead of a narrow letters/digits/specials-only list,
--- so any keyboard key or mouse button can be captured, not just a handful.
 local CaptureCandidates = {}
 for c = 1, 254 do
     CaptureCandidates[#CaptureCandidates+1] = c
@@ -394,9 +385,9 @@ local IsParryBusy  = false
 local IsDodgeBusy  = false
 local ParryBusyAt  = 0
 local DodgeBusyAt  = 0
-local LastParryTime  = 0
-local LastDodgeTime  = 0
-local LastActionTime = 0
+local LastParryTime    = 0
+local LastDodgeTime    = 0
+local LastActionTime   = 0
 local LastParryAttempt = 0
 
 local PARRY_HOLD     = 0.25
@@ -405,6 +396,35 @@ local DODGE_DURATION = 0.18
 local DODGE_COOLDOWN = 0.10
 local ACTION_LOCKOUT = 0.20
 local BUSY_TIMEOUT   = 2.0
+
+local INTERMITTENT_COOLDOWN    = 3.0
+local LastIntermittentDodge    = -INTERMITTENT_COOLDOWN
+
+local IntermittentDirMap = {
+    ["Back"]   = "back",
+    ["Front"]  = "forward",
+    ["Left"]   = "left",
+    ["Right"]  = "right",
+    ["Random"] = "random",
+}
+
+local function GetIntermittentDir()
+    local setting = _G.VV_AutoParry.IntermittentDir or "Back"
+    if setting == "Random" then
+        local dirs = {"back", "forward", "left", "right"}
+        return dirs[math.random(1, #dirs)]
+    end
+    return IntermittentDirMap[setting] or "back"
+end
+
+local function GetIntermittentChance()
+    local v = _G.VV_AutoParry.IntermittentChance
+    return type(v) == "number" and math.max(0, math.min(100, v)) or 30
+end
+
+local function IsIntermittentDodgeEnabled()
+    return _G.VV_AutoParry.IntermittentDodge == true
+end
 
 local function IsActionLocked(now)
     return (now - LastActionTime) < ACTION_LOCKOUT
@@ -428,25 +448,6 @@ local function SetBlock(state)
     end
 end
 
-local function TapParry(reason, slot)
-    if IsParryBusy then return false end
-    if tick() - LastParryTime < PARRY_COOLDOWN then return false end
-    IsParryBusy      = true
-    ParryBusyAt      = tick()
-    LastParryTime    = tick()
-    LastParryAttempt = tick()
-    Stats.Parries    = Stats.Parries + 1
-    task.spawn(function()
-        if not State.Running then IsParryBusy = false; return end
-        SetBlock(true)
-        Notify("PARRY")
-        task.wait(PARRY_HOLD)
-        SetBlock(false)
-        IsParryBusy = false
-    end)
-    return true
-end
-
 local DirKeys = { back=0x53, left=0x41, right=0x44, forward=0x57 }
 
 local function TapDodge(reason, direction)
@@ -468,6 +469,37 @@ local function TapDodge(reason, direction)
         IsDodgeBusy = false
     end)
     return true
+end
+
+local function TapParry(reason, slot)
+    if IsParryBusy then return false end
+    if tick() - LastParryTime < PARRY_COOLDOWN then return false end
+    IsParryBusy      = true
+    ParryBusyAt      = tick()
+    LastParryTime    = tick()
+    LastParryAttempt = tick()
+    Stats.Parries    = Stats.Parries + 1
+    task.spawn(function()
+        if not State.Running then IsParryBusy = false; return end
+        SetBlock(true)
+        Notify("PARRY")
+        task.wait(PARRY_HOLD)
+        SetBlock(false)
+        IsParryBusy = false
+    end)
+    return true
+end
+
+local function TryIntermittentDodge(now)
+    if not IsIntermittentDodgeEnabled() then return false end
+    if (now - LastIntermittentDodge) < INTERMITTENT_COOLDOWN then return false end
+    local chance = GetIntermittentChance()
+    if math.random(1, 100) > chance then return false end
+    local dodged = TapDodge("intermittent", GetIntermittentDir())
+    if dodged then
+        LastIntermittentDodge = now
+    end
+    return dodged
 end
 
 local Moves = {
@@ -788,8 +820,8 @@ local function DrawVisuals(myRoot, targetRoot, target, mode, inRange, now)
             inMyRange and Colors.MyRangeIn or Colors.MyRangeOut)
 
         if target and targetRoot then
-            local tPos      = targetRoot.Position
-            local tMoved    = DistSq(tPos, LastTargetPos) > MOVE_THRESH_SQ
+            local tPos       = targetRoot.Position
+            local tMoved     = DistSq(tPos, LastTargetPos) > MOVE_THRESH_SQ
             local tRangeDiff = EnemyWeaponRange ~= LastEnemyRange
 
             if tMoved or tRangeDiff or mode ~= LastMode or inRange ~= LastInRange
@@ -932,7 +964,8 @@ if type(Lib) == "table" then
         menuKey    = "Insert",
         autoSave   = true,
         smartFps   = true,
-        logo       = "https://tr.rbxcdn.com/180DAY-b37eb206561635a8e049057f69b046a2/150/150/Image/Webp/noFilter",
+        logo       = "https://i.postimg.cc/59Th8JWx/image-2026-07-05-191431276.png",
+        icon       = "https://i.postimg.cc/59Th8JWx/image-2026-07-05-191431276.png",
     })
 
     Lib:SetPerformance(true)
@@ -953,26 +986,7 @@ if type(Lib) == "table" then
         StartKeybindCapture("DodgeKey")
     end)
 
-    local combat = mainTab:Section("Combat Settings", "Right", "adjust combat behavior")
-    combat:Toggle("Health Check", GetCfg("HealthCheck", true), function(v)
-        _G.VV_AutoParry.HealthCheck = v
-        Notify("Health Check: " .. tostring(v), true)
-    end)
-    combat:Toggle("Fallback Mode", GetCfg("FallbackEnabled", true), function(v)
-        _G.VV_AutoParry.FallbackEnabled = v
-        Notify("Fallback Mode: " .. tostring(v), true)
-    end)
-    combat:Divider()
-    combat:Toggle("Auto Ping", GetCfg("AutoPing", true), function(v)
-        _G.VV_AutoParry.AutoPing = v
-        Notify("Auto Ping: " .. tostring(v), true)
-    end)
-    combat:Slider("Manual Ping (ms)", GetCfg("PingMs", 10), 1, 0, 200, "ms", function(v)
-        _G.VV_AutoParry.PingMs = v
-        Notify("Manual Ping: " .. tostring(v) .. "ms", true)
-    end)
-
-    local actions = mainTab:Section("Quick Actions", "Right", "quick access controls")
+    local actions = mainTab:Section("Quick Actions", "Left", "quick access controls")
     actions:Button("Find Target", function()
         if not CurrentTarget then
             CurrentTarget = GetClosestToCursor()
@@ -1004,6 +1018,46 @@ if type(Lib) == "table" then
             end,
         })
     end)
+
+    local combat = mainTab:Section("Combat Settings", "Right", "adjust combat behavior")
+    combat:Toggle("Health Check", GetCfg("HealthCheck", true), function(v)
+        _G.VV_AutoParry.HealthCheck = v
+        Notify("Health Check: " .. tostring(v), true)
+    end)
+    combat:Toggle("Fallback Mode", GetCfg("FallbackEnabled", true), function(v)
+        _G.VV_AutoParry.FallbackEnabled = v
+        Notify("Fallback Mode: " .. tostring(v), true)
+    end)
+    combat:Divider()
+    combat:Toggle("Auto Ping", GetCfg("AutoPing", true), function(v)
+        _G.VV_AutoParry.AutoPing = v
+        Notify("Auto Ping: " .. tostring(v), true)
+    end)
+    combat:Slider("Manual Ping (ms)", GetCfg("PingMs", 10), 1, 0, 200, "ms", function(v)
+        _G.VV_AutoParry.PingMs = v
+        Notify("Manual Ping: " .. tostring(v) .. "ms", true)
+    end)
+    combat:Divider()
+    combat:Toggle("Intermittent Dodging", GetCfg("IntermittentDodge", false), function(v)
+        _G.VV_AutoParry.IntermittentDodge = v
+        Notify("Intermittent Dodging: " .. tostring(v), true)
+    end)
+    combat:Slider("Dodge Chance (%)", GetCfg("IntermittentChance", 30), 1, 1, 100, "%", function(v)
+        _G.VV_AutoParry.IntermittentChance = v
+        Notify("Dodge Chance: " .. tostring(v) .. "%", true)
+    end)
+    do
+        local dirOptions = {"Back", "Front", "Left", "Right", "Random"}
+        local currentDir = GetCfg("IntermittentDir", "Back")
+        local defaultIdx = 1
+        for i, v in ipairs(dirOptions) do
+            if v == currentDir then defaultIdx = i; break end
+        end
+        combat:Dropdown("Dodge Direction", defaultIdx, dirOptions, false, function(v)
+            _G.VV_AutoParry.IntermittentDir = v[1]  -- single selection returns a list
+            Notify("Dodge Direction: " .. v[1], true)
+        end)
+    end
 
     local visualTab = win:Tab("Visuals", "eye")
 
@@ -1255,11 +1309,16 @@ while State.Running do
 
                     if ParryAttempt.State == "IDLE" and signalActive and not PrevSignal
                        and not IsActionLocked(now) and fallbackEnabled then
-                        local fireAt = ComputeFireAt(SignalWatch.StartedAt, CurrentWeaponType, CurrentTarget)
-                        fireAt = math.max(fireAt, now + 0.04)
-                        ParryAttempt.State  = "SIGNAL_WAIT"
-                        ParryAttempt.FireAt = fireAt
-                        ParryAttempt.Slot   = "M1"
+                        if TryIntermittentDodge(now) then
+                            currentMode        = "dodge"
+                            ParryAttempt.State = "FIRED"
+                        else
+                            local fireAt = ComputeFireAt(SignalWatch.StartedAt, CurrentWeaponType, CurrentTarget)
+                            fireAt = math.max(fireAt, now + 0.04)
+                            ParryAttempt.State  = "SIGNAL_WAIT"
+                            ParryAttempt.FireAt = fireAt
+                            ParryAttempt.Slot   = "M1"
+                        end
                     end
 
                     if ParryAttempt.State == "SIGNAL_WAIT" and clashNow and not PrevClash then
