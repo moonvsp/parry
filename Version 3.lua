@@ -397,7 +397,7 @@ local DODGE_COOLDOWN = 0.10
 local ACTION_LOCKOUT = 0.20
 local BUSY_TIMEOUT   = 2.0
 
-local INTERMITTENT_COOLDOWN    = 3.0
+local INTERMITTENT_COOLDOWN    = 1.5
 local LastIntermittentDodge    = -INTERMITTENT_COOLDOWN
 
 local IntermittentDirMap = {
