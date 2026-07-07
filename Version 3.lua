@@ -1,11 +1,9 @@
--- // Originally made by @unkamui
--- // Remastered by @yuhjinxx
-
 if not _G.VV_AutoParry then
     _G.VV_AutoParry = {
         ToggleKey           = "G",
         BlockKey            = "F",
         DodgeKey            = "Q",
+        SprintKey           = "LeftShift",
         PingMs              = 10,
         AutoPing            = true,
         ShowRange           = true,
@@ -17,6 +15,7 @@ if not _G.VV_AutoParry then
         IntermittentDodge   = false,
         IntermittentDir     = "Back",
         IntermittentChance  = 30,
+        IntermittentMethod  = "Shunpo",
     }
 end
 
@@ -329,7 +328,9 @@ end
 local SpecialKeys = {
     F1=0x70,F2=0x71,F3=0x72,F4=0x73,F5=0x74,F6=0x75,
     F7=0x76,F8=0x77,F9=0x78,F10=0x79,F11=0x7A,F12=0x7B,
-    Shift=0x10,Control=0x11,Alt=0x12,CapsLock=0x14,
+    LeftShift=0xA0, RightShift=0xA1,
+    LeftControl=0xA2, RightControl=0xA3,
+    LeftAlt=0xA4, RightAlt=0xA5,
     Space=0x20,Enter=0x0D,Backspace=0x08,Tab=0x09,
     Escape=0x1B,Delete=0x2E,Insert=0x2D,
     Home=0x24,End=0x23,PageUp=0x21,PageDown=0x22,
@@ -377,8 +378,9 @@ local function GetCfg(key, default)
 end
 
 local KEY_TOGGLE = ResolveKey(GetCfg("ToggleKey", "G"), "G")
-local KEY_BLOCK  = ResolveKey(GetCfg("BlockKey",  "F"), "F")
-local KEY_DODGE  = ResolveKey(GetCfg("DodgeKey",  "Q"), "Q")
+local KEY_BLOCK  = ResolveKey(GetCfg("BlockKey", "F"), "F")
+local KEY_DODGE  = ResolveKey(GetCfg("DodgeKey", "Q"), "Q")
+local KEY_SPRINT = ResolveKey(GetCfg("SprintKey", "LeftShift"), "LeftShift")
 
 local IsBlocking   = false
 local IsParryBusy  = false
@@ -397,8 +399,12 @@ local DODGE_COOLDOWN = 0.10
 local ACTION_LOCKOUT = 0.20
 local BUSY_TIMEOUT   = 2.0
 
-local INTERMITTENT_COOLDOWN    = 1.5
-local LastIntermittentDodge    = -INTERMITTENT_COOLDOWN
+local DASH_DURATION  = 0.15
+local DASH_COOLDOWN  = 3.0
+local LastDashTime   = -DASH_COOLDOWN
+
+local INTERMITTENT_COOLDOWN = 1.5
+local LastIntermittentDodge = -INTERMITTENT_COOLDOWN
 
 local IntermittentDirMap = {
     ["Back"]   = "back",
@@ -407,6 +413,8 @@ local IntermittentDirMap = {
     ["Right"]  = "right",
     ["Random"] = "random",
 }
+
+local DirKeys = { back=0x53, left=0x41, right=0x44, forward=0x57 }
 
 local function GetIntermittentDir()
     local setting = _G.VV_AutoParry.IntermittentDir or "Back"
@@ -424,6 +432,10 @@ end
 
 local function IsIntermittentDodgeEnabled()
     return _G.VV_AutoParry.IntermittentDodge == true
+end
+
+local function GetIntermittentMethod()
+    return _G.VV_AutoParry.IntermittentMethod or "Shunpo"
 end
 
 local function IsActionLocked(now)
@@ -448,8 +460,6 @@ local function SetBlock(state)
     end
 end
 
-local DirKeys = { back=0x53, left=0x41, right=0x44, forward=0x57 }
-
 local function TapDodge(reason, direction)
     if IsDodgeBusy then return false end
     if tick() - LastDodgeTime < DODGE_COOLDOWN then return false end
@@ -466,6 +476,30 @@ local function TapDodge(reason, direction)
         task.wait(DODGE_DURATION)
         DoRelease(KEY_DODGE)
         KeyRelease(dirKey)
+        IsDodgeBusy = false
+    end)
+    return true
+end
+
+local function TapDash(direction, now)
+    if IsDodgeBusy then return false end
+    if (now - LastDashTime) < DASH_COOLDOWN then return false end
+    IsDodgeBusy   = true
+    DodgeBusyAt   = now
+    LastDashTime  = now
+    LastDodgeTime = now
+    Stats.Dodges  = Stats.Dodges + 1
+    Notify("DASH")
+    task.spawn(function()
+        if not State.Running then IsDodgeBusy = false; return end
+        local dirKey = DirKeys[direction] or DirKeys.back
+        KeyPress(KEY_SPRINT)
+        KeyPress(0x20)
+        KeyPress(dirKey)
+        task.wait(DASH_DURATION)
+        KeyRelease(dirKey)
+        KeyRelease(0x20)
+        KeyRelease(KEY_SPRINT)
         IsDodgeBusy = false
     end)
     return true
@@ -495,11 +529,18 @@ local function TryIntermittentDodge(now)
     if (now - LastIntermittentDodge) < INTERMITTENT_COOLDOWN then return false end
     local chance = GetIntermittentChance()
     if math.random(1, 100) > chance then return false end
-    local dodged = TapDodge("intermittent", GetIntermittentDir())
-    if dodged then
+    local dir = GetIntermittentDir()
+    local method = GetIntermittentMethod()
+    local ok
+    if method == "Dash" then
+        ok = TapDash(dir, now)
+    else
+        ok = TapDodge("intermittent", dir)
+    end
+    if ok then
         LastIntermittentDodge = now
     end
-    return dodged
+    return ok
 end
 
 local Moves = {
@@ -752,9 +793,7 @@ local function HideVisuals()
 end
 
 local function WorldToScreenSafe(pos)
-    if type(WorldToScreen) == "function" then
-        return WorldToScreen(pos)
-    end
+    if type(WorldToScreen) == "function" then return WorldToScreen(pos) end
     local cam = Camera
     if not cam then return nil, false end
     local vec, on = cam:WorldToScreenPoint(pos)
@@ -924,8 +963,9 @@ end
 local function CommitKeybind(configKey, code)
     Cfg[configKey] = KeyCodeToLabel(code)
     if configKey == "ToggleKey" then KEY_TOGGLE = code
-    elseif configKey == "BlockKey" then KEY_BLOCK = code
-    elseif configKey == "DodgeKey" then KEY_DODGE = code end
+    elseif configKey == "BlockKey"  then KEY_BLOCK  = code
+    elseif configKey == "DodgeKey"  then KEY_DODGE  = code
+    elseif configKey == "SprintKey" then KEY_SPRINT = code end
     TryUpdateButtonLabel(configKey, configKey .. ": " .. KeyCodeToLabel(code))
     Notify(configKey .. " bound to " .. KeyCodeToLabel(code), true)
     KeybindListening = nil
@@ -984,6 +1024,9 @@ if type(Lib) == "table" then
     end)
     KeybindButtons["DodgeKey"] = keybinds:Button("DodgeKey: " .. tostring(Cfg.DodgeKey), function()
         StartKeybindCapture("DodgeKey")
+    end)
+    KeybindButtons["SprintKey"] = keybinds:Button("SprintKey: " .. tostring(Cfg.SprintKey), function()
+        StartKeybindCapture("SprintKey")
     end)
 
     local actions = mainTab:Section("Quick Actions", "Left", "quick access controls")
@@ -1049,13 +1092,21 @@ if type(Lib) == "table" then
     do
         local dirOptions = {"Back", "Front", "Left", "Right", "Random"}
         local currentDir = GetCfg("IntermittentDir", "Back")
-        local defaultIdx = 1
-        for i, v in ipairs(dirOptions) do
-            if v == currentDir then defaultIdx = i; break end
-        end
-        combat:Dropdown("Dodge Direction", defaultIdx, dirOptions, false, function(v)
-            _G.VV_AutoParry.IntermittentDir = v[1]  -- single selection returns a list
+        local dirIdx = 1
+        for i, v in ipairs(dirOptions) do if v == currentDir then dirIdx = i; break end end
+        combat:Dropdown("Dodge Direction", dirIdx, dirOptions, false, function(v)
+            _G.VV_AutoParry.IntermittentDir = v[1]
             Notify("Dodge Direction: " .. v[1], true)
+        end)
+    end
+    do
+        local methodOptions = {"Shunpo", "Dash"}
+        local currentMethod = GetCfg("IntermittentMethod", "Shunpo")
+        local methodIdx = 1
+        for i, v in ipairs(methodOptions) do if v == currentMethod then methodIdx = i; break end end
+        combat:Dropdown("Method", methodIdx, methodOptions, false, function(v)
+            _G.VV_AutoParry.IntermittentMethod = v[1]
+            Notify("Dodge Method: " .. v[1], true)
         end)
     end
 
@@ -1377,6 +1428,7 @@ if _G and _G[InstanceKey] == State then _G[InstanceKey] = nil end
 SetBlock(false)
 DoRelease(KEY_BLOCK)
 DoRelease(KEY_DODGE)
+KeyRelease(KEY_SPRINT)
 for _, dk in pairs(DirKeys) do KeyRelease(dk) end
 HideVisuals()
 State.Cleanup()
